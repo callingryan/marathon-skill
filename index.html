@@ -1,687 +1,725 @@
 <!DOCTYPE html>
-<html lang="zh-TW" class="dark">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>大法師馬拉松隨身教練</title>
-    <!-- Tailwind CSS for modern athletic UI -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>馬拉松大法師隨身教練</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Marked.js for beautiful markdown rendering -->
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Marked.js (Markdown 解析器) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Lucide Icons for clean sport aesthetics -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Google Fonts Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                    colors: {
-                        brand: {
-                            black: '#090D16',
-                            dark: '#121826',
-                            card: '#1E2640',
-                            accent: '#10B981', // Neon Emerald
-                            accentHover: '#059669',
-                            text: '#F3F4F6'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Garmin FIT SDK 官方 UMD 模組 -->
+    <script src="https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.143.0/dist/index.umd.min.js"></script>
+
     <style>
-        /* Custom scrollbar and touch highlights */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #121826;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1E2640;
-            border-radius: 3px;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        
         body {
-            -webkit-tap-highlight-color: transparent;
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+        .garmin-font {
+            font-family: 'Barlow Condensed', sans-serif;
+        }
+        /* 隱藏滾動條但維持滾動功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 跑步霓虹動態背景 */
+        .neon-border-green {
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.2);
+        }
+        .neon-text-green {
+            text-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
         }
     </style>
 </head>
-<body class="bg-brand-black text-brand-text font-sans min-h-screen flex flex-col selection:bg-brand-accent selection:text-brand-black">
+<body class="h-screen overflow-hidden flex flex-col">
 
-    <!-- Top Header -->
-    <header class="sticky top-0 z-50 bg-brand-dark/95 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-accent to-emerald-300 flex items-center justify-center shadow-lg shadow-brand-accent/20">
-                <i data-lucide="zap" class="text-brand-black w-6 h-6 stroke-[2.5]"></i>
+    <!-- 頂部 Garmin 風格導覽列 -->
+    <header class="bg-[#111827] border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/30">
+                <i class="fa-solid fa-person-running text-green-400 text-xl animate-pulse"></i>
             </div>
             <div>
-                <h1 class="font-extrabold text-base tracking-wide flex items-center gap-1.5">
-                    大法師教練 <span class="text-xs px-2 py-0.5 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20">馬拉松 Pro</span>
-                </h1>
-                <p class="text-[10px] text-gray-400">20 年經驗週期化跑步顧問</p>
+                <h1 class="text-lg font-bold tracking-wider text-white">大法師馬拉松隨身教練</h1>
+                <p class="text-xs text-gray-400 font-medium">Garmin Connect & 漢森訓練法專用儀表板</p>
             </div>
         </div>
-        <div class="flex items-center gap-2">
-            <button id="toggleConfigBtn" class="p-2 rounded-lg bg-brand-card hover:bg-gray-800 transition-colors text-gray-300">
-                <i data-lucide="settings" class="w-5 h-5"></i>
+        <div class="flex items-center space-x-3">
+            <span id="apiStatusBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1">
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰
+            </span>
+            <button onclick="toggleSettingsModal(true)" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition duration-150">
+                <i class="fa-solid fa-cog text-gray-300"></i>
             </button>
         </div>
     </header>
 
-    <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6">
-        <!-- Left Column: Input Panel -->
-        <div class="w-full lg:w-[45%] flex flex-col gap-5">
-            
-            <!-- API Key Configuration (Collapsible) -->
-            <div id="configPanel" class="hidden bg-brand-card p-4 rounded-xl border border-gray-800 transition-all duration-300">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2">
-                        <i data-lucide="key-round" class="w-4 h-4 text-brand-accent"></i> API 設定 (選擇性)
-                    </h3>
-                    <span class="text-[10px] bg-yellow-500/10 text-yellow-400 px-2 py-0.5 rounded">雲端 API 連接</span>
-                </div>
-                <p class="text-xs text-gray-400 mb-3">請填入您在 Google AI Studio 申請的 Gemini API Key，數據將直接與 Google 官方伺服器通訊：</p>
-                <div class="flex gap-2">
-                    <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="flex-1 bg-brand-black border border-gray-700 rounded-lg px-3 py-2 text-sm text-brand-text focus:outline-none focus:border-brand-accent">
-                    <button id="saveApiKeyBtn" class="bg-brand-accent hover:bg-brand-accentHover text-brand-black font-semibold text-xs px-4 py-2 rounded-lg transition-colors">儲存</button>
-                </div>
-            </div>
-
-            <!-- Athlete State & Settings -->
-            <div class="bg-brand-dark p-4 rounded-xl border border-gray-800 flex flex-col gap-4">
-                <div class="flex items-center gap-2 border-b border-gray-800 pb-2">
-                    <i data-lucide="activity" class="text-brand-accent w-5 h-5"></i>
-                    <h2 class="font-bold text-sm">選手當前狀態回報</h2>
-                </div>
-
-                <!-- Pain and Injury Checkboxes -->
-                <div>
-                    <label class="block text-xs font-semibold text-gray-300 mb-2">1. 身體痛點 / 傷痛部位 (複選)</label>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <label class="flex items-center gap-2 p-2 rounded bg-brand-card/50 cursor-pointer hover:bg-brand-card border border-transparent checked-border">
-                            <input type="checkbox" name="injury" value="膝蓋髕骨痛" class="accent-brand-accent">
-                            <span>膝蓋髕骨周圍</span>
-                        </label>
-                        <label class="flex items-center gap-2 p-2 rounded bg-brand-card/50 cursor-pointer hover:bg-brand-card border border-transparent checked-border">
-                            <input type="checkbox" name="injury" value="阿基里斯腱/小腿緊繃" class="accent-brand-accent">
-                            <span>阿基里斯腱</span>
-                        </label>
-                        <label class="flex items-center gap-2 p-2 rounded bg-brand-card/50 cursor-pointer hover:bg-brand-card border border-transparent checked-border">
-                            <input type="checkbox" name="injury" value="足底筋膜痛" class="accent-brand-accent">
-                            <span>足底筋膜</span>
-                        </label>
-                        <label class="flex items-center gap-2 p-2 rounded bg-brand-card/50 cursor-pointer hover:bg-brand-card border border-transparent checked-border">
-                            <input type="checkbox" name="injury" value="大腿後側/臀肌拉傷" class="accent-brand-accent">
-                            <span>臀肌/大腿後側</span>
-                        </label>
+    <!-- 主畫面容器 -->
+    <main class="flex-1 overflow-hidden flex flex-col md:flex-row">
+        
+        <!-- 左側：控制面板 & 數據上傳 -->
+        <section class="w-full md:w-[420px] bg-[#111827] border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0 overflow-y-auto no-scrollbar">
+            <!-- 區塊 1: 數據上傳區 -->
+            <div class="p-5 border-b border-gray-800">
+                <h2 class="text-xs font-bold tracking-widest text-gray-400 uppercase mb-3">數據解碼通道</h2>
+                <div id="dropzone" class="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-green-400/50 hover:bg-green-500/[0.02] transition duration-200 flex flex-col items-center justify-center min-h-[160px]">
+                    <input type="file" id="fileInput" accept=".fit,.json" class="hidden" />
+                    <div id="uploadPrompt">
+                        <i class="fa-solid fa-file-invoice text-4xl text-gray-500 mb-3 block"></i>
+                        <span class="text-sm font-semibold text-gray-300 block mb-1">上傳 Garmin 原始數據</span>
+                        <span class="text-xs text-gray-500 block">支援拖曳 .fit 檔或 .json 分段檔案</span>
                     </div>
-                </div>
-
-                <!-- RPE Slider -->
-                <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="text-xs font-semibold text-gray-300">2. 自覺運動強度疲勞度 (RPE)</label>
-                        <span id="rpeValue" class="text-sm font-extrabold text-brand-accent">6 - 中等疲勞</span>
-                    </div>
-                    <input type="range" id="rpeSlider" min="1" max="10" value="6" class="w-full h-1.5 bg-brand-card rounded-lg appearance-none cursor-pointer accent-brand-accent">
-                    <div class="flex justify-between text-[9px] text-gray-500 mt-1">
-                        <span>1 (完全輕鬆)</span>
-                        <span>5 (有難度)</span>
-                        <span>10 (極度力竭)</span>
+                    <div id="uploadSuccess" class="hidden text-center">
+                        <i class="fa-solid fa-circle-check text-4xl text-green-400 mb-3"></i>
+                        <span id="fileNameDisplay" class="text-sm font-bold text-white block truncate max-w-[280px]">檔案載入成功</span>
+                        <span id="fileRowsDisplay" class="text-xs text-green-400 block mt-1 font-mono">成功解析出 0 個分段 Laps</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Data Input Area -->
-            <div class="bg-brand-dark p-4 rounded-xl border border-gray-800 flex flex-col gap-4">
-                <div class="flex items-center justify-between border-b border-gray-800 pb-2">
-                    <div class="flex items-center gap-2">
-                        <i data-lucide="file-json" class="text-brand-accent w-5 h-5"></i>
-                        <h2 class="font-bold text-sm">上傳 JSON 或 Garmin .FIT 數據</h2>
+            <!-- 區塊 2: 選手當前狀態填寫 -->
+            <div class="p-5 space-y-6 flex-1">
+                <h2 class="text-xs font-bold tracking-widest text-gray-400 uppercase">選手體感回報 (當次跑步)</h2>
+                
+                <!-- RPE 滑桿 -->
+                <div>
+                    <div class="flex justify-between text-sm mb-2">
+                        <span class="font-medium text-gray-300">自覺運動強度 (RPE)</span>
+                        <span id="rpeValue" class="font-bold text-green-400 font-mono garmin-font text-lg">6 - 稍累</span>
                     </div>
-                    <button id="trySampleBtn" class="text-[10px] text-brand-accent hover:underline flex items-center gap-1">
-                        <i data-lucide="sparkles" class="w-3 h-3"></i> 載入測試數據
-                    </button>
+                    <input type="range" id="rpeInput" min="1" max="10" value="6" class="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-green-400" />
+                    <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+                        <span>1 (極輕鬆)</span>
+                        <span>5 (有氧界限)</span>
+                        <span>10 (筋疲力竭)</span>
+                    </div>
                 </div>
 
-                <!-- File Dropzone -->
-                <div id="dropzone" class="border-2 border-dashed border-gray-700 hover:border-brand-accent/50 rounded-xl p-4 flex flex-col items-center justify-center transition-all bg-brand-card/20 cursor-pointer group">
-                    <input type="file" id="fileInput" accept=".json,.fit" class="hidden">
-                    <i data-lucide="upload-cloud" class="w-8 h-8 text-gray-500 group-hover:text-brand-accent mb-2 transition-colors"></i>
-                    <p class="text-xs font-semibold text-gray-300">點擊或拖曳 Garmin .FIT 或 JSON 檔案至此</p>
-                    <p class="text-[10px] text-gray-500 mt-1">網頁端會自動進行二進位解碼與配速換算</p>
+                <!-- 傷痛勾選區 -->
+                <div>
+                    <span class="text-sm font-medium text-gray-300 block mb-3">傷痛與異常訊號 (多選)</span>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="足底筋膜" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">👣 足底筋膜</span>
+                        </label>
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="阿基里斯腱" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">⚡ 阿基里斯腱</span>
+                        </label>
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="膝關節髕骨" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">🦵 膝關節髕骨</span>
+                        </label>
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="髂脛束ITB" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">💥 髂脛束 (ITB)</span>
+                        </label>
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="小腿/脛骨痛" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">🩹 小腿/脛骨痛</span>
+                        </label>
+                        <label class="flex items-center space-x-2.5 bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 cursor-pointer hover:border-gray-700 transition">
+                            <input type="checkbox" name="injury" value="心率漂移/過度疲勞" class="rounded text-green-500 focus:ring-0 bg-gray-900 border-gray-700 w-4 h-4" />
+                            <span class="text-xs text-gray-300 font-medium">❤️ 異常疲勞/高心率</span>
+                        </label>
+                    </div>
                 </div>
 
-                <!-- Manual Input Area -->
-                <div class="flex flex-col gap-2">
-                    <label class="text-xs font-semibold text-gray-300">或直接貼上跑步描述（如：5分速跑10K）</label>
-                    <textarea id="manualInput" rows="4" placeholder="教練，我今天跑完漢森進展期的節奏跑課表，10公里平均心率162，後段有點爆掉..." class="w-full bg-brand-card border border-gray-800 rounded-lg p-3 text-xs text-brand-text focus:outline-none focus:border-brand-accent resize-none placeholder:text-gray-600"></textarea>
+                <!-- 額外備註 -->
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">額外細節（如：天氣悶熱、值班睡眠不足等）</label>
+                    <textarea id="additionalNotes" rows="3" class="w-full bg-gray-800 rounded-xl p-3 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400 border border-gray-700 placeholder-gray-500" placeholder="大法師教練：『小老弟，今天狀態有什麼反常嗎？寫下來，我們一併評估！』"></textarea>
                 </div>
-
-                <!-- Action Button -->
-                <button id="submitBtn" class="w-full bg-brand-accent hover:bg-brand-accentHover text-brand-black font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-brand-accent/20 transition-all flex items-center justify-center gap-2 active:scale-95">
-                    <i data-lucide="navigation" class="w-4 h-4 fill-brand-black"></i> 召喚大法師教練診斷
+                
+                <!-- 啟動按鈕 -->
+                <button id="diagnoseBtn" onclick="sendToDiagnose()" class="w-full py-4 bg-green-500 hover:bg-green-400 text-[#0b0f19] font-bold rounded-xl text-sm transition duration-200 tracking-widest flex items-center justify-center space-x-2 uppercase shadow-lg shadow-green-500/20">
+                    <i class="fa-solid fa-dumbbell text-base"></i>
+                    <span>召喚大法師教練診斷</span>
                 </button>
             </div>
-        </div>
+        </section>
 
-        <!-- Right Column: Coach Response Screen -->
-        <div class="flex-1 flex flex-col bg-brand-dark rounded-xl border border-gray-800 overflow-hidden min-h-[450px]">
-            <div class="bg-brand-card/50 px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-brand-accent"></span>
-                    <h2 class="font-bold text-sm tracking-wide">診斷對談室</h2>
+        <!-- 右側：診斷對話室 -->
+        <section class="flex-1 bg-[#0b0f19] flex flex-col h-1/2 md:h-full overflow-hidden relative">
+            <!-- 聊天室頂部 -->
+            <div class="bg-[#111827]/50 border-b border-gray-800/60 px-6 py-3.5 flex items-center justify-between shrink-0">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse"></span>
+                    <span class="text-xs font-bold tracking-wider text-gray-300 uppercase">診斷對話室</span>
                 </div>
-                <button id="clearChatBtn" class="text-xs text-gray-400 hover:text-red-400 flex items-center gap-1">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 清除歷史
+                <button onclick="clearChatHistory()" class="text-xs font-medium text-gray-500 hover:text-red-400 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>清除歷史</span>
                 </button>
             </div>
 
-            <!-- Response Container -->
-            <div id="chatHistory" class="flex-1 p-4 overflow-y-auto space-y-4 max-h-[600px]">
-                <!-- Default Welcome Message -->
-                <div class="flex gap-3 max-w-[85%]">
-                    <div class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 border border-brand-accent/30">
-                        <i data-lucide="sparkles" class="text-brand-accent w-4 h-4"></i>
+            <!-- 聊天內容滾動區 -->
+            <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- 預設教練歡迎對話 -->
+                <div class="flex items-start space-x-3 max-w-[85%]">
+                    <div class="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-wand-magic-sparkles text-green-400 text-sm"></i>
                     </div>
-                    <div class="bg-brand-card p-3 rounded-2xl rounded-tl-none border border-gray-800">
-                        <p class="text-xs leading-relaxed">
-                            選手你好！我是你的隨身 <strong class="text-brand-accent">大法師教練</strong>。🏃‍♂️
-                        </p>
-                        <p class="text-xs leading-relaxed mt-2">
-                            今天我們的身體狀態如何？你可以點選左側填入當前的<strong class="text-emerald-400">痛點/疲勞感（RPE）</strong>，或者直接上傳手錶轉出的 <strong class="text-emerald-400">JSON 或是原始 .FIT 檔案</strong>。我會為你自動換算完美配速，並給予最精準的 <strong class="text-brand-accent">A/B/C 彈性課表調整</strong>與營養、修復方案！
-                        </p>
+                    <div class="bg-gray-800/40 border border-gray-800 rounded-2xl rounded-tl-none p-4 text-sm text-gray-300 leading-relaxed shadow-sm">
+                        選手你好！我是你的隨身 <span class="text-green-400 font-bold">大法師教練</span>。🏃‍♂️<br><br>
+                        今天我們的身體狀態如何？你可以點選左側填入當前的 <span class="text-green-400 font-semibold">痛點/疲勞感 (RPE)</span>，或者直接上傳手錶轉出的 <span class="text-green-400 font-semibold">JSON 或是原始 .FIT 檔案</span>。我會為你自動換算完美配速，並給予最精準的 <span class="text-green-400 font-semibold">A/B/C 彈性課表調整</span> 與營養、修復方案！
                     </div>
                 </div>
             </div>
 
-            <!-- Loading State Placeholder -->
-            <div id="loadingState" class="hidden p-4 flex gap-3 items-start max-w-[85%]">
-                <div class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 border border-brand-accent/30 animate-spin">
-                    <i data-lucide="loader-2" class="text-brand-accent w-4 h-4"></i>
+            <!-- 載入中遮罩層 (覆蓋對話框) -->
+            <div id="loadingOverlay" class="hidden absolute inset-0 bg-[#0b0f19]/80 backdrop-blur-xs flex flex-col items-center justify-center z-20 transition duration-300">
+                <div class="relative w-20 h-20 flex items-center justify-center">
+                    <div class="absolute inset-0 rounded-full border-4 border-t-green-400 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+                    <i class="fa-solid fa-running text-3xl text-green-400 animate-bounce"></i>
                 </div>
-                <div class="bg-brand-card p-3 rounded-2xl rounded-tl-none border border-gray-800">
-                    <div class="space-y-2 w-48">
-                        <div class="h-2 bg-gray-700 rounded animate-pulse w-3/4"></div>
-                        <div class="h-2 bg-gray-700 rounded animate-pulse w-full"></div>
-                        <div class="h-2 bg-gray-700 rounded animate-pulse w-5/6"></div>
-                    </div>
-                </div>
+                <p class="text-sm font-bold tracking-widest text-green-400 mt-4 animate-pulse">大法師正在注入訓練法力，請稍候...</p>
+                <p class="text-xs text-gray-500 mt-1 font-mono">正在透過雲端 API 進行高維度定量生理學推理...</p>
             </div>
-        </div>
+        </section>
     </main>
 
-    <!-- Toast Notification System -->
-    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-brand-card border border-brand-accent/30 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 transform translate-y-10 opacity-0 pointer-events-none transition-all duration-300">
-        <i data-lucide="info" class="text-brand-accent w-5 h-5"></i>
-        <span id="toastText" class="text-xs font-semibold"></span>
+    <!-- ⚙️ 設定 Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-[#111827] border border-gray-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-green-400"></i>
+                    <span>後台通訊設定</span>
+                </h3>
+                <button onclick="toggleSettingsModal(false)" class="text-gray-500 hover:text-gray-300">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">Gemini 雲端 API 金鑰</label>
+                    <div class="relative">
+                        <input type="password" id="apiKeyInput" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 pl-3 pr-10 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400 focus:border-green-400 font-mono" placeholder="貼上 AI Studio 申請的金鑰 (AIzaSy...)" />
+                        <button onclick="togglePasswordVisibility('apiKeyInput')" class="absolute right-3 top-3.5 text-gray-500 hover:text-gray-300">
+                            <i id="apiKeyEyeIcon" class="fa-solid fa-eye-slash"></i>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-1.5 leading-relaxed">金鑰將僅儲存於本機瀏覽器的 `localStorage` 中，不會以任何形式回傳或公開，絕對確保您的個資與通訊隱私。</p>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">雲端推理模型大腦</label>
+                    <select id="modelSelect" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-3 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (最推薦：反應極速且聰明)</option>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (最相容：老舊設備連線穩定)</option>
+                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (極度精密：複雜資料深度解析)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-900 border-t border-gray-800 flex justify-end space-x-3">
+                <button onclick="toggleSettingsModal(false)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold rounded-xl text-xs transition">
+                    取消
+                </button>
+                <button onclick="saveSettings()" class="px-5 py-2 bg-green-500 hover:bg-green-400 text-[#0b0f19] font-bold rounded-xl text-xs transition tracking-widest uppercase">
+                    確認儲存
+                </button>
+            </div>
+        </div>
     </div>
 
+    <!-- 頁底與腳本導入 -->
     <script>
-        // Configuration state
-        // SAFE STORAGE IMPLEMENTATION WITH FALLBACK
-        let localApiKey = "";
-        try {
-            localApiKey = localStorage.getItem('marathon_gemini_key') || "";
-        } catch (e) {
-            console.warn("本機不支援 localStorage (可能是 file:// 協定限制)。改為暫時記憶體模式。");
-        }
-        
-        // System Prompt defined directly
-        const SYSTEM_INSTRUCTION = `你是一位擁有 20 年經驗的頂尖馬拉松總教練，自稱「大法師教練」。精通運動生理學（如心率區間分析、最大攝氧量 VO2 Max 發展）、現代週期化訓練理論（丹尼爾博士跑步方程式、漢森訓練法）、運動營養學及睡眠科學。
+        // 系統常數
+        const DEFAULT_SYSTEM_PROMPT = `你是一位擁有 20 年經驗的頂尖馬拉松總教練，精通運動生理學（如心率區間分析、最大攝氧量 VO2 Max 發展）、現代週期化訓練理論（丹尼爾博士跑步方程式、漢森訓練法）、運動營養學及睡眠科學。
 
 # Tone and Style
-- 語氣：專業、鼓勵、理性但充滿熱情、注重細節。自稱「大法師教練」。
+- 語氣：專業、鼓勵、理性但充滿熱情、注重細節，自稱「大法師教練」。
 - 像一位既嚴格又關心選手健康的隨身教練，多用「我們」來建立夥伴關係。
 - 當使用者提供數據（如配速、心率、分段時間）時，進行精準的定量分析，避免模糊的安慰。
 
 # Core Responsibilities
-1. 週期化課表設計與交叉訓練 (Periodization & Cross-Training)
+## 1. 週期化課表設計與交叉訓練 (Periodization & Cross-Training)
 - 根據使用者的目標賽事（全馬/半馬/10K）、目標時間、當前跑力、週里程與訓練週期，提供量身打造的週課表或月課表。
 - 課表需清晰標明：訓練型態（E 輕鬆跑、M 馬拉松配速、T 節奏跑、I 間歇跑、R 重複跑、XT 交叉訓練）、距離/時間、目標配速或心率區間。
-- 動態調整協議：每次課表設計或建議時，必須遵循以下邏輯：
-  * A 級（原訂課表）：身體狀態良好時的標準執行。
-  * B 級（微調課表）：身體疲勞時的降配速或減量執行。
-  * C 級（替代課表）：身體有傷痛或極度疲勞時的交叉訓練（XT）替代方案（如自行車、跳繩）。
+- 決策優先級：對象的身體狀態（RPE、疲勞感、傷痛回報）優先於既定課表。
+- 動態調整協議：當身體狀況不佳時，必須主動提供三個等級的執行建議：
+  - A 級（原訂課表）：身體狀態良好時的標準執行。
+  - B 級（微調課表）：身體疲勞時的降配速或減量執行。
+  - C 級（替代課表）：身體有傷痛或極度疲勞時的交叉訓練（XT）替代方案（例如：自行車、游泳等）。
 
-2. 跑步數據深度分析 (Data Analysis)
-- 使用者會上傳由前端 JavaScript 幫你預先換算好的完美 Laps 列表。你必須嚴格對其數據（包含平均心率、配速等）進行精準診斷，並針對異常數據（例如：E跑心率過高、間歇跑後段失速）給出修正建議。
+## 2. 跑步數據深度分析 (Data Analysis)
+- 判斷是否有有氧心率漂移、過度訓練跡象或體能提升。
+- 針對不合理的數據（例如：E 跑心率過高、間歇跑後段失速）給出具體修正建議。
+- 當使用者提供跑步紀錄時，請幫忙分析其分段總結，並列出每段的時間、距離、換算後配速、平均心率。
 
-3. 運動營養與恢復
-- 視訓練負荷與選手自覺強度（RPE）給出滾筒放鬆、拉伸與補給策略。若選手有傷痛，強制執行 C 級課表。`;
+## 3. 運動營養與賽事補給建議 (Nutrition & Fueling Strategy)
+- 依據強度提供平日訓練與賽前肝醣超補指引，精算賽中電解質與能量膠的補充時機。
 
-        // Dummy Test JSON
-        const SAMPLE_JSON = {
-            "activityName": "進展期 10K 節奏跑測試",
-            "laps": [
-                { "lapIndex": 1, "distance_meters": 1000, "duration_seconds": 298, "avg_heart_rate": 138, "avg_speed_mps": 3.35 },
-                { "lapIndex": 2, "distance_meters": 1000, "duration_seconds": 295, "avg_heart_rate": 142, "avg_speed_mps": 3.39 },
-                { "lapIndex": 3, "distance_meters": 1000, "duration_seconds": 290, "avg_heart_rate": 149, "avg_speed_mps": 3.45 },
-                { "lapIndex": 4, "distance_meters": 1000, "duration_seconds": 288, "avg_heart_rate": 154, "avg_speed_mps": 3.47 },
-                { "lapIndex": 5, "distance_meters": 1000, "duration_seconds": 285, "avg_heart_rate": 159, "avg_speed_mps": 3.51 },
-                { "lapIndex": 6, "distance_meters": 1000, "duration_seconds": 280, "avg_heart_rate": 165, "avg_speed_mps": 3.57 },
-                { "lapIndex": 7, "distance_meters": 1000, "duration_seconds": 292, "avg_heart_rate": 168, "avg_speed_mps": 3.42 },
-                { "lapIndex": 8, "distance_meters": 1000, "duration_seconds": 305, "avg_heart_rate": 169, "avg_speed_mps": 3.28 },
-                { "lapIndex": 9, "distance_meters": 1000, "duration_seconds": 310, "avg_heart_rate": 167, "avg_speed_mps": 3.22 },
-                { "lapIndex": 10, "distance_meters": 1000, "duration_seconds": 315, "avg_heart_rate": 164, "avg_speed_mps": 3.17 }
-            ]
-        };
+## 4. 睡眠與恢復建議 (Sleep & Recovery)
+- 強調睡眠對 HRV 與修復的影響。若睡眠不足或有過度訓練跡象（如靜息心率飆高），強制要求減量或休息。
 
-        let activeParsedMarkdownTable = "";
+# Workflow Constraint
+1. 每次調整課表前，必須結合並診斷選手回報的「傷痛狀況」與「疲勞自覺（RPE）」。
+2. 若有傷痛，優先以低強度交叉訓練取代跑步。`;
 
-        // Initialize UI components
-        document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
-            try {
-                if (localApiKey) {
-                    document.getElementById('apiKeyInput').value = localApiKey;
-                }
-            } catch (e) {}
+        // 全域變數
+        let parsedLapsData = null; // 儲存成功解析出來的跑步分段 JSON 數據
+        let isSettingsSaving = false;
+
+        // 初始化設定
+        window.addEventListener('DOMContentLoaded', () => {
+            initRpeSlider();
+            initDragAndDrop();
+            loadSavedSettings();
         });
 
-        // Toggle Config Panel
-        const configPanel = document.getElementById('configPanel');
-        document.getElementById('toggleConfigBtn').addEventListener('click', () => {
-            configPanel.classList.toggle('hidden');
-        });
-
-        // Save API Key WITH SAFELY ERROR HANDLING
-        document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
-            const val = document.getElementById('apiKeyInput').value.trim();
-            localApiKey = val;
-            try {
-                localStorage.setItem('marathon_gemini_key', val);
-                showToast('API 密鑰已儲存成功！');
-            } catch (e) {
-                showToast('瀏覽器安全性鎖定！金鑰暫存於記憶體，重新整理網頁將需重新貼上。');
-            }
-            configPanel.classList.add('hidden');
-        });
-
-        // Dynamic RPE Slider Text
-        const rpeSlider = document.getElementById('rpeSlider');
-        const rpeValueText = document.getElementById('rpeValue');
-        const rpeDescriptions = {
-            1: "1 - 睡前放鬆感",
-            2: "2 - 極其輕鬆 (散步)",
-            3: "3 - 輕鬆 (E跑有氧)",
-            4: "4 - 稍有感 (馬拉松配速)",
-            5: "5 - 有點喘 (M-T跑區間)",
-            6: "6 - 中等疲勞 (節奏跑體感)",
-            7: "7 - 辛苦且專注 (間歇前段)",
-            8: "8 - 非常辛苦 (間歇跑後半段)",
-            9: "9 - 極度力竭 (重力賽事衝刺)",
-            10: "10 - 徹底虛脫"
-        };
-        rpeSlider.addEventListener('input', (e) => {
-            rpeValueText.textContent = rpeDescriptions[e.target.value] || e.target.value;
-        });
-
-        // Toast System
-        function showToast(text) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toastText').textContent = text;
-            toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-10');
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-10');
-            }, 3000);
+        // 1. RPE 滑桿動態文字連端
+        function initRpeSlider() {
+            const rpeInput = document.getElementById('rpeInput');
+            const rpeValue = document.getElementById('rpeValue');
+            const rpeTexts = {
+                1: "1 - 極輕鬆 (幾乎無感)",
+                2: "2 - 很輕鬆 (可以唱歌)",
+                3: "3 - 輕鬆 (極度流暢有氧)",
+                4: "4 - 稍有感 (完全鼻吸輕鬆跑)",
+                5: "5 - 中等 (有氧界限/丹尼爾E心率上限)",
+                6: "6 - 稍累 (有些喘/微有壓力)",
+                7: "7 - 累 (馬拉松配速區間/M區間)",
+                8: "8 - 很累 (乳酸閥值臨界/T配速跑)",
+                9: "9 - 極累 (間歇跑強度/I配速跑)",
+                10: "10 - 筋疲力竭 (極限R配速/衝刺竭力)"
+            };
+            rpeInput.addEventListener('input', (e) => {
+                const val = e.target.value;
+                rpeValue.innerText = rpeTexts[val] || val;
+            });
         }
 
-        // File Parsing Logic (Client-side JSON translation)
-        function processJSONData(data) {
+        // 2. 檔案拖曳與解析模組
+        function initDragAndDrop() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+
+            dropzone.addEventListener('click', () => fileInput.click());
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('border-green-400', 'bg-green-500/[0.05]');
+            });
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('border-green-400', 'bg-green-500/[0.05]');
+            });
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('border-green-400', 'bg-green-500/[0.05]');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) handleUploadedFile(files[0]);
+            });
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) handleUploadedFile(e.target.files[0]);
+            });
+        }
+
+        // 3. 核心解密引擎：處理檔案並換算
+        async function handleUploadedFile(file) {
+            const uploadPrompt = document.getElementById('uploadPrompt');
+            const uploadSuccess = document.getElementById('uploadSuccess');
+            const fileNameDisplay = document.getElementById('fileNameDisplay');
+            const fileRowsDisplay = document.getElementById('fileRowsDisplay');
+
+            fileNameDisplay.innerText = file.name;
+            uploadPrompt.classList.add('hidden');
+            uploadSuccess.classList.remove('hidden');
+
             try {
-                let laps = [];
-                if (Array.isArray(data)) {
-                    laps = data;
-                } else if (data.laps && Array.isArray(data.laps)) {
-                    laps = data.laps;
-                } else if (data.lap && Array.isArray(data.lap)) {
-                    laps = data.lap;
-                } else {
-                    for (let key in data) {
-                        if (Array.isArray(data[key])) {
-                            laps = data[key];
-                            break;
+                if (file.name.endsWith('.fit')) {
+                    // 解密 .fit 二進位檔案
+                    fileRowsDisplay.innerText = "正在呼叫 Garmin 官方 SDK 核心解碼...";
+                    const buffer = await file.arrayBuffer();
+                    const uint8Array = new Uint8Array(buffer);
+                    
+                    // 動態導入 Garmin Decoder (UMD 模組安全解析)
+                    if (!window.GarminFitSdk) {
+                        throw new Error("Garmin Fit 解碼模組未載入成功，請確認網路連線。");
+                    }
+                    
+                    const { Decoder, Stream } = window.GarminFitSdk;
+                    const stream = Stream.fromByteArray(uint8Array);
+                    const decoder = new Decoder(stream);
+                    
+                    // 驗證檔案完整性
+                    if (!decoder.isCorrectFileType()) {
+                        throw new Error("偵測到此檔案並非正確的 Garmin FIT 檔案格式。");
+                    }
+                    
+                    const { messages } = decoder.read();
+                    const laps = messages.lapMesgs || [];
+                    
+                    if (laps.length === 0) {
+                        throw new Error("解碼成功，但檔案中未發現分段 Laps 數據總結。");
+                    }
+
+                    // 數據提煉與「5/6分速」物理公式換算
+                    parsedLapsData = laps.map((lap, index) => {
+                        const distanceKm = lap.totalDistance ? (lap.totalDistance / 1000).toFixed(2) : "N/A";
+                        const timeSec = lap.totalTimerTime || lap.totalElapsedTime || 0;
+                        const avgSpeedMs = lap.avgSpeed; // Garmin 原始速度單位是 m/s
+                        
+                        // 跑步精準換算公式： 配速 (分/公里) = 16.666 / 速度 (m/s)
+                        let formattedPace = "N/A";
+                        if (avgSpeedMs && avgSpeedMs > 0) {
+                            const totalMinutes = 16.6666 / avgSpeedMs;
+                            const mins = Math.floor(totalMinutes);
+                            const secs = Math.round((totalMinutes - mins) * 60);
+                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}`;
                         }
+
+                        return {
+                            lapIndex: index + 1,
+                            distance: distanceKm,
+                            time: formatTime(timeSec),
+                            pace: formattedPace,
+                            avgHr: lap.avgHeartRate || "N/A"
+                        };
+                    });
+
+                    fileRowsDisplay.innerText = `成功解析出 ${parsedLapsData.length} 個運動分段 Laps`;
+
+                } else if (file.name.endsWith('.json')) {
+                    // 解析普通 JSON 檔
+                    const text = await file.text();
+                    const json = JSON.parse(text);
+                    const laps = json.laps || json.history || json;
+                    
+                    if (!Array.isArray(laps)) {
+                        throw new Error("JSON 格式不正確，找不到 Laps 陣列數據。");
                     }
-                }
 
-                if (laps.length === 0) {
-                    showToast('找不到分段數據陣列！請確認格式。');
-                    return;
-                }
+                    parsedLapsData = laps.map((lap, index) => {
+                        const distance = (lap.distance / 1000).toFixed(2) || lap.distance || "N/A";
+                        const timeSec = lap.time || lap.duration || 0;
+                        const avgSpeedMs = lap.avg_speed || lap.speed;
+                        
+                        let formattedPace = "N/A";
+                        if (avgSpeedMs && avgSpeedMs > 0) {
+                            const totalMinutes = 16.6666 / avgSpeedMs;
+                            const mins = Math.floor(totalMinutes);
+                            const secs = Math.round((totalMinutes - mins) * 60);
+                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}`;
+                        } else if (lap.pace) {
+                            formattedPace = lap.pace;
+                        }
 
-                buildPaceTableAndPreview(laps, 'JSON 智慧數據');
-            } catch (err) {
-                console.error(err);
-                showToast('解析 JSON 錯誤，請確認檔案格式是否正確。');
-            }
-        }
+                        return {
+                            lapIndex: index + 1,
+                            distance: distance,
+                            time: formatTime(timeSec),
+                            pace: formattedPace,
+                            avgHr: lap.avg_hr || lap.avg_heart_rate || "N/A"
+                        };
+                    });
 
-        // Core JavaScript FIT File Binary Decoder via Garmin SDK
-        async function processFitData(arrayBuffer) {
-            showToast('🚀 正在本地端載入 Garmin 解碼模組...');
-            try {
-                // Dynamically import Garmin official FIT SDK from jsDelivr ESM CDN
-                const { Decoder, Stream } = await import('https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.194.0/+esm');
-                
-                // Read FIT arraybuffer stream
-                const streamInstance = Stream.fromArrayBuffer(arrayBuffer);
-                const decoderInstance = new Decoder(streamInstance);
-                
-                const { messages, errors } = decoderInstance.read();
-                if (errors && errors.length > 0) {
-                    console.warn("Garmin Decoder warning errors: ", errors);
-                }
-
-                // Extract laps
-                let fitLaps = messages.lapMesgs || messages.lap_mesgs || messages.laps || messages.lap || [];
-                
-                if (fitLaps.length === 0) {
-                    // Fallback to check if records exist and aggregate them if lap summary is missing
-                    showToast('找不到 Lap 數據！試圖讀取 Record 計算中...');
-                    const records = messages.recordMesgs || [];
-                    if (records.length === 0) {
-                        showToast('此 FIT 檔案沒有包含有效的跑步軌跡數據。');
-                        return;
-                    }
-                    // Simple Mock Lap of full session
-                    fitLaps = [{
-                        totalDistance: records[records.length-1].distance || 0,
-                        totalTimerTime: records[records.length-1].timestamp - records[0].timestamp,
-                        avgSpeed: records.reduce((acc, r) => acc + (r.speed || 0), 0) / records.length,
-                        avgHeartRate: records.reduce((acc, r) => acc + (r.heartRate || 0), 0) / records.length
-                    }];
-                }
-
-                // Standardize Garmin FIT structures to our App Laps
-                const standardizedLaps = fitLaps.map((lap, idx) => {
-                    const distMeters = lap.totalDistance || lap.total_distance || lap.distance || 1000;
-                    const durationSec = lap.totalTimerTime || lap.totalElapsedTime || lap.total_timer_time || lap.total_elapsed_time || lap.duration || 300;
-                    const speedMps = lap.avgSpeed || lap.avg_speed || (distMeters / durationSec);
-                    const hr = lap.avgHeartRate || lap.avg_heart_rate || lap.avgHr || 0;
-
-                    return {
-                        lapIndex: idx + 1,
-                        distance_meters: distMeters,
-                        duration_seconds: durationSec,
-                        avg_speed_mps: speedMps,
-                        avg_heart_rate: hr
-                    };
-                });
-
-                buildPaceTableAndPreview(standardizedLaps, 'Garmin .FIT 原始解碼');
-                showToast(`✅ 成功解密 ${standardizedLaps.length} 個 Garmin 實體分段！`);
-            } catch (err) {
-                console.error("Garmin Decoder loading failed", err);
-                showToast('無法在瀏覽器本機解密 .FIT 檔案。請確認網路通暢或使用 JSON。');
-            }
-        }
-
-        // Standard Pace & Speed Table Builder ($Pace = 16.666 / Speed$)
-        function buildPaceTableAndPreview(laps, sourceName) {
-            let tableMd = `### 🏃‍♂️ 本地端智慧數據解析結果 (${sourceName})\n\n| 分段 (Lap) | 距離 (公里) | 時間 | 換算後配速 (分'秒\") | 平均心率 (bpm) | 原始速度 (m/s) |\n| :---: | :---: | :---: | :---: | :---: | :---: |\n`;
-            
-            laps.forEach((lap, idx) => {
-                const distanceKm = lap.distance_meters ? (lap.distance_meters / 1000).toFixed(2) : ((lap.distance || 1000) / 1000).toFixed(2);
-                const durationSec = lap.duration_seconds || lap.duration || lap.time_seconds || 300;
-                
-                // Format duration to mm:ss
-                const m = Math.floor(durationSec / 60);
-                const s = Math.round(durationSec % 60);
-                const durationStr = `${m}:${s < 10 ? '0' : ''}${s}`;
-
-                // Calculate Pace from Speed (m/s) using official formula
-                let speedMps = lap.avg_speed_mps || lap.avg_speed || lap.speed;
-                let paceStr = "";
-                
-                if (speedMps && speedMps > 0) {
-                    const paceDec = 16.666 / speedMps;
-                    const pMin = Math.floor(paceDec);
-                    const pSec = Math.round((paceDec - pMin) * 60);
-                    paceStr = `${pMin}'${pSec < 10 ? '0' : ''}${pSec}"`;
+                    fileRowsDisplay.innerText = `成功解碼 ${parsedLapsData.length} 條 JSON 分段紀錄`;
                 } else {
-                    // Fallback using distance & time
-                    const paceDec = (durationSec / 60) / (parseFloat(distanceKm));
-                    const pMin = Math.floor(paceDec);
-                    const pSec = Math.round((paceDec - pMin) * 60);
-                    paceStr = `${pMin}'${pSec < 10 ? '0' : ''}${pSec}"`;
-                    speedMps = (parseFloat(distanceKm) * 1000 / durationSec).toFixed(2);
+                    throw new Error("不支援此副檔名！請上傳 .fit 或 .json 檔案。");
                 }
+            } catch (err) {
+                console.error("File parsing error:", err);
+                uploadPrompt.classList.remove('hidden');
+                uploadSuccess.classList.add('hidden');
+                appendChatError("檔案解密解析失敗", err.message);
+                parsedLapsData = null;
+            }
+        }
 
-                const hr = (lap.avg_heart_rate && lap.avg_heart_rate > 0) ? Math.round(lap.avg_heart_rate) : '無紀錄';
+        // 秒數轉換工具
+        function formatTime(totalSeconds) {
+            if (!totalSeconds) return "00:00";
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
 
-                tableMd += `| Lap ${idx + 1} | ${distanceKm} km | ${durationStr} | **${paceStr}** | ${hr} bpm | ${parseFloat(speedMps).toFixed(2)} m/s |\n`;
+        // 4. API 金鑰與設定管理
+        function loadSavedSettings() {
+            const savedKey = localStorage.getItem('gemini_api_key');
+            const savedModel = localStorage.getItem('gemini_model');
+            const badge = document.getElementById('apiStatusBadge');
+
+            if (savedKey) {
+                document.getElementById('apiKeyInput').value = savedKey;
+                badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-1"></span> 金鑰已連線`;
+            } else {
+                badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰`;
+            }
+
+            if (savedModel) {
+                document.getElementById('modelSelect').value = savedModel;
+            }
+        }
+
+        function saveSettings() {
+            const keyInput = document.getElementById('apiKeyInput').value.trim();
+            const modelSelect = document.getElementById('modelSelect').value;
+
+            if (keyInput) {
+                localStorage.setItem('gemini_api_key', keyInput);
+            } else {
+                localStorage.removeItem('gemini_api_key');
+            }
+            localStorage.setItem('gemini_model', modelSelect);
+
+            loadSavedSettings();
+            toggleSettingsModal(false);
+        }
+
+        function toggleSettingsModal(show) {
+            const modal = document.getElementById('settingsModal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById('apiKeyEyeIcon');
+            if (input.type === "password") {
+                input.type = "text";
+                icon.className = "fa-solid fa-eye";
+            } else {
+                input.type = "password";
+                icon.className = "fa-solid fa-eye-slash";
+            }
+        }
+
+        // 5. 診斷控制主邏輯 (無縫組裝發送)
+        async function sendToDiagnose() {
+            const apiKey = localStorage.getItem('gemini_api_key');
+            const selectedModel = document.getElementById('modelSelect').value || 'gemini-2.5-flash';
+
+            if (!apiKey) {
+                toggleSettingsModal(true);
+                appendChatError("通訊阻斷：缺少通訊金鑰", "請先點擊右上角⚙️設定，貼上您的 Gemini API Key。如果是本地開啟 file:// 協定，必須使用託管平台或先進行金鑰配置！");
+                return;
+            }
+
+            // 讀取體感回報數據
+            const rpe = document.getElementById('rpeInput').value;
+            const additionalNotes = document.getElementById('additionalNotes').value.trim();
+            
+            const injuries = [];
+            document.querySelectorAll('input[name="injury"]:checked').forEach(cb => {
+                injuries.push(cb.value);
             });
 
-            activeParsedMarkdownTable = tableMd;
-            document.getElementById('manualInput').value += `\n[已解碼 ${sourceName} 資料]\n教練，我已上傳手錶分段，請幫我分析！`;
-        }
+            // 建立打包好的 Prompt 文字
+            let userPrompt = `教練好！這是我昨天的跑步表現回報與體能狀態，請幫我分析診斷：\n\n`;
+            userPrompt += `[基本體感 RPE]：${rpe}分（自覺運動強度）\n`;
+            userPrompt += `[傷痛/疲勞狀態]：${injuries.length > 0 ? injuries.join(', ') : '無異常，身體感覺棒極了！'}\n`;
+            if (additionalNotes) {
+                userPrompt += `[選手備註額外資訊]：${additionalNotes}\n`;
+            }
 
-        // Drag and Drop & File Upload handling
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('fileInput');
-
-        dropzone.addEventListener('click', () => fileInput.click());
-        dropzone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropzone.classList.add('border-brand-accent', 'bg-brand-card/50');
-        });
-        dropzone.addEventListener('dragleave', () => {
-            dropzone.classList.remove('border-brand-accent', 'bg-brand-card/50');
-        });
-        dropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropzone.classList.remove('border-brand-accent', 'bg-brand-card/50');
-            const file = e.dataTransfer.files[0];
-            if (file) handleFile(file);
-        });
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
-        });
-
-        function handleFile(file) {
-            const extension = file.name.split('.').pop().toLowerCase();
-            
-            if (extension === 'fit') {
-                // Read .FIT binary file as ArrayBuffer
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processFitData(e.target.result);
-                };
-                reader.readAsArrayBuffer(file);
-            } else if (extension === 'json') {
-                // Read .JSON file as Text
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const parsed = JSON.parse(e.target.result);
-                        processJSONData(parsed);
-                    } catch (err) {
-                        showToast('讀取失敗，此檔案並非合法的 JSON 格式。');
-                    }
-                };
-                reader.readAsText(file);
+            if (parsedLapsData && parsedLapsData.length > 0) {
+                userPrompt += `\n[已解碼 Garmin 手錶原始數據分段表]：\n`;
+                userPrompt += `| 分段 | 距離 (km) | 時間 (Timer) | 換算配速 (Pace) | 平均心率 (bpm) |\n`;
+                userPrompt += `|:---:|:---:|:---:|:---:|:---:|\n`;
+                parsedLapsData.forEach(lap => {
+                    userPrompt += `| Lap ${lap.lapIndex} | ${lap.distance} km | ${lap.time} | ${lap.pace} | ${lap.avgHr} bpm |\n`;
+                });
+                userPrompt += `\n請特別針對上述解碼出來的「各分段變速與心率連動性」進行精準診斷！\n`;
             } else {
-                showToast('不支援此檔案類型！請上傳 .FIT 或 .JSON 檔。');
+                userPrompt += `\n[手錶數據紀錄]：選手當次未上傳檔案數據，請主要依據其「體感 RPE」與「備註痛點」提供下階段漢森訓練法調整建議。\n`;
+            }
+
+            // 在聊天框添加使用者的氣泡
+            appendUserMessage(userPrompt);
+            toggleLoading(true);
+
+            try {
+                // 發送請求並限制錯誤不崩潰
+                const diagnosis = await fetchGeminiDiagnosis(userPrompt, apiKey, selectedModel);
+                
+                // 強大防禦：如果回傳空值，主動拋出異常，絕不放行 marked 解析
+                if (!diagnosis || typeof diagnosis !== 'string') {
+                    throw new Error("API 發送成功，但 Google 伺服器回傳了空的回應內容，請確認您的帳號是否有區域、流量或年齡限制。");
+                }
+
+                // 渲染 markdown 並加載
+                const htmlContent = marked.parse(diagnosis);
+                appendCoachMessage(htmlContent);
+
+            } catch (err) {
+                console.error("API 請求發生錯誤:", err);
+                appendChatError("呼叫診斷發生異常", err.message);
+            } finally {
+                toggleLoading(false);
             }
         }
 
-        // Try Sample button
-        document.getElementById('trySampleBtn').addEventListener('click', () => {
-            processJSONData(SAMPLE_JSON);
-        });
+        // 6. 核心 API 對接 (嚴格拋出異常, 防止 marked 被 undefined 擊穿)
+        async function fetchGeminiDiagnosis(prompt, apiKey, modelName) {
+            // 清理 API Key (防止複製時夾帶隱形空白、換行造成 400 Bad Request)
+            const cleanKey = apiKey.trim().replace(/[\n\r\t]/g, '');
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${cleanKey}`;
 
-        // Clear Chat
-        document.getElementById('clearChatBtn').addEventListener('click', () => {
-            document.getElementById('chatHistory').innerHTML = `
-                <div class="flex gap-3 max-w-[85%]">
-                    <div class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 border border-brand-accent/30">
-                        <i data-lucide="sparkles" class="text-brand-accent w-4 h-4"></i>
-                    </div>
-                    <div class="bg-brand-card p-3 rounded-2xl rounded-tl-none border border-gray-800 text-xs">
-                        對話歷史已清除。大法師教練隨時可以開始新的診斷！
-                    </div>
-                </div>
-            `;
-            activeParsedMarkdownTable = "";
-            document.getElementById('manualInput').value = "";
-            lucide.createIcons();
-        });
-
-        // Send payload to Gemini Cloud API
-        async function fetchGeminiDiagnosis(userQuery) {
-            const apiKey = localApiKey || ""; 
-            if (!apiKey) {
-                throw new Error("API 金鑰為空，請點選右上角 ⚙️ 設定先貼入您的金鑰。");
-            }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
+            const requestBody = {
+                contents: [
+                    {
+                        parts: [
+                            { text: prompt }
+                        ]
+                    }
+                ],
                 systemInstruction: {
-                    parts: [{ text: SYSTEM_INSTRUCTION }]
+                    parts: [
+                        { text: DEFAULT_SYSTEM_PROMPT }
+                    ]
                 }
             };
 
-            let delay = 1000;
-            const maxRetries = 3;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(requestBody)
+            });
 
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            // 如果連線狀態碼非 OK (如 400, 403, 429)，直接抓取原廠錯誤訊息拋出
+            if (!response.ok) {
+                let errorDetails = `HTTP 錯誤碼: ${response.status}`;
                 try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.status === 429) {
-                        console.warn(`Rate limited. Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2;
-                        continue;
+                    const errJson = await response.json();
+                    if (errJson.error && errJson.error.message) {
+                        errorDetails = `${errJson.error.message} (錯誤型態: ${errJson.error.status})`;
                     }
-
-                    if (!response.ok) {
-                        const errData = await response.json().catch(() => ({}));
-                        const errMsg = errData.error?.message || `HTTP 錯誤代碼 ${response.status}`;
-                        throw new Error(`Google API 回傳錯誤: ${errMsg}`);
-                    }
-
-                    const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "教練腦袋打結了，沒有回應...";
-                } catch (err) {
-                    if (attempt === maxRetries) {
-                        throw err;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
+                } catch (e) {
+                    // 若抓取 JSON 失敗，維持預設 HTTP 訊息
                 }
+                throw new Error(errorDetails);
             }
+
+            const data = await response.json();
+
+            // 防禦性檢查 API Candidates
+            if (!data.candidates || data.candidates.length === 0) {
+                throw new Error("伺服器已成功回應，但沒有生成任何候選診斷候選。");
+            }
+
+            const candidate = data.candidates[0];
+
+            // 檢查安全審核是否拒絕生成
+            if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                if (candidate.finishReason === "SAFETY") {
+                    throw new Error("此通訊內容被 Google AI 安全安全過濾機制阻擋，請調整您的輸入字句。");
+                }
+                throw new Error(`生成中止，中斷原因代碼: ${candidate.finishReason}`);
+            }
+
+            return candidate.content?.parts?.[0]?.text;
         }
 
-        // Main Submit Action
-        document.getElementById('submitBtn').addEventListener('click', async () => {
-            const manualText = document.getElementById('manualInput').value.trim();
+        // 7. 聊天視窗 DOM 動態更新模組
+        function appendUserMessage(text) {
+            const chatContainer = document.getElementById('chatContainer');
+            const sanitizedText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
             
-            if (!manualText && !activeParsedMarkdownTable) {
-                showToast('請先上傳跑步數據，或輸入您當前的跑步自覺狀態！');
-                return;
-            }
-
-            if (!localApiKey) {
-                showToast('請先點選右上角 ⚙️ 設定並貼入您的 Gemini API Key！');
-                configPanel.classList.remove('hidden');
-                return;
-            }
-
-            // Gather athlete context
-            const rpe = document.getElementById('rpeSlider').value;
-            const selectedInjuries = Array.from(document.querySelectorAll('input[name="injury"]:checked')).map(cb => cb.value);
-            const injuryText = selectedInjuries.length > 0 ? selectedInjuries.join('、') : "無回報痛點";
-
-            // Construct rich prompt
-            let prompt = `【選手當前狀態】
-- 自覺疲勞強度 (RPE): ${rpe} / 10
-- 傷痛部位回報: ${injuryText}
-\n`;
-
-            if (activeParsedMarkdownTable) {
-                prompt += `【分段 Lap 速度/心率換算數據】\n${activeParsedMarkdownTable}\n`;
-            }
-
-            if (manualText) {
-                prompt += `【選手自我描述】\n${manualText}\n`;
-            }
-
-            prompt += `\n請依據以上數據進行精準定量分析，給出具體診斷。並提供我明後天的【A級（原訂）】、【B級（微調）】與【C級（交叉訓練替代）】彈性課表規劃與修復處方！`;
-
-            // Append User Question to Bubble UI
-            const chatHistory = document.getElementById('chatHistory');
-            const userBubble = document.createElement('div');
-            userBubble.className = "flex gap-3 justify-end max-w-[85%] ml-auto";
-            userBubble.innerHTML = `
-                <div class="bg-brand-accent/10 border border-brand-accent/20 p-3 rounded-2xl rounded-tl-none text-xs text-brand-text leading-relaxed">
-                    ${manualText || "已送出跑步手錶數據與身體 RPE 回報。"}
-                    ${activeParsedMarkdownTable ? `<div class="mt-2 text-[10px] text-gray-400 bg-brand-black/30 p-1.5 rounded">📊 已包含 Garmin 解析數據表</div>` : ""}
+            const html = `
+                <div class="flex items-start space-x-3 max-w-[85%] ml-auto justify-end">
+                    <div class="bg-green-500/10 border border-green-500/25 rounded-2xl rounded-tr-none p-4 text-sm text-green-300 leading-relaxed shadow-sm">
+                        ${sanitizedText}
+                    </div>
+                    <div class="w-9 h-9 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-user text-green-400 text-sm"></i>
+                    </div>
                 </div>
             `;
-            chatHistory.appendChild(userBubble);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
+            chatContainer.innerHTML += html;
+            scrollChatToBottom();
+        }
 
-            // Trigger Loading State
-            const loader = document.getElementById('loadingState');
-            loader.classList.remove('hidden');
+        function appendCoachMessage(htmlContent) {
+            const chatContainer = document.getElementById('chatContainer');
+            const html = `
+                <div class="flex items-start space-x-3 max-w-[85%]">
+                    <div class="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-wand-magic-sparkles text-green-400 text-sm"></i>
+                    </div>
+                    <div class="bg-gray-800/40 border border-gray-800 rounded-2xl rounded-tl-none p-4 text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm shadow-sm max-w-full">
+                        ${htmlContent}
+                    </div>
+                </div>
+            `;
+            chatContainer.innerHTML += html;
+            scrollChatToBottom();
+        }
 
-            try {
-                const diagnosis = await fetchGeminiDiagnosis(prompt);
-                
-                // Hide Loader
-                loader.classList.add('hidden');
+        // 🚨 終極排錯氣泡 (絕不引發 marked.js 崩潰)
+        function appendChatError(title, detail) {
+            const chatContainer = document.getElementById('chatContainer');
+            const html = `
+                <div class="flex items-start space-x-3 max-w-[90%]">
+                    <div class="w-9 h-9 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-triangle-exclamation text-red-400 text-sm"></i>
+                    </div>
+                    <div class="bg-red-950/20 border border-red-900/50 rounded-2xl rounded-tl-none p-5 text-sm text-red-200 leading-relaxed shadow-lg max-w-full">
+                        <h4 class="font-bold text-red-400 text-base flex items-center space-x-2 mb-2">
+                            <i class="fa-solid fa-times-circle"></i>
+                            <span>${title}</span>
+                        </h4>
+                        <div class="bg-black/40 p-3 rounded-lg border border-red-900/30 font-mono text-xs text-red-300 break-all mb-3 select-all">
+                            ${detail}
+                        </div>
+                        <div class="text-xs text-gray-400 leading-relaxed space-y-1">
+                            <p>💡 <b>大法師教練的診斷除錯建議：</b></p>
+                            <p>1. 請點選右上角 ⚙️，檢查您的 API Key 最前方或最後方是否有夾帶複製時多選的「空白、換行」。</p>
+                            <p>2. 如果是 <b>"Failed to fetch"</b>，代表您的手機安全瀏覽器阻擋了本地 file:// 連線，請參考教學改將此 HTML 檔案上傳到免費的 GitHub Pages 開啟。</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            chatContainer.innerHTML += html;
+            scrollChatToBottom();
+        }
 
-                // Render Coach Bubble
-                const coachBubble = document.createElement('div');
-                coachBubble.className = "flex gap-3 max-w-[85%]";
-                coachBubble.innerHTML = `
-                    <div class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 border border-brand-accent/30 shadow-md">
-                        <i data-lucide="zap" class="text-brand-accent w-4 h-4"></i>
-                    </div>
-                    <div class="bg-brand-card p-4 rounded-2xl rounded-tl-none border border-gray-800 text-xs leading-relaxed prose prose-invert max-w-none">
-                        ${marked.parse(diagnosis)}
-                    </div>
-                `;
-                chatHistory.appendChild(coachBubble);
-                lucide.createIcons();
-                chatHistory.scrollTop = chatHistory.scrollHeight;
+        function toggleLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) overlay.classList.remove('hidden');
+            else overlay.classList.add('hidden');
+        }
 
-                // Clear input field state for next message
-                document.getElementById('manualInput').value = "";
-            } catch (err) {
-                loader.classList.add('hidden');
-                // DETAILED ERROR LOGGER ON SCREEN
-                const errorBubble = document.createElement('div');
-                errorBubble.className = "flex gap-3 max-w-[85%]";
-                errorBubble.innerHTML = `
-                    <div class="w-8 h-8 rounded-full bg-red-900/20 flex items-center justify-center shrink-0 border border-red-500/30">
-                        <i data-lucide="alert-triangle" class="text-red-400 w-4 h-4"></i>
+        function scrollChatToBottom() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.scrollTo({
+                top: chatContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        function clearChatHistory() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = `
+                <div class="flex items-start space-x-3 max-w-[85%]">
+                    <div class="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-wand-magic-sparkles text-green-400 text-sm"></i>
                     </div>
-                    <div class="bg-red-950/40 p-4 rounded-2xl rounded-tl-none border border-red-900/50 text-xs text-red-300">
-                        <p class="font-bold mb-1">❌ 呼叫診斷發生異常：</p>
-                        <p class="font-mono bg-black/30 p-1.5 rounded text-[10px] overflow-x-auto">${err.message || err}</p>
-                        <p class="mt-2 text-[10px] text-gray-400">💡 提示：若顯示 "Failed to fetch"，代表手機瀏覽器在本地 file:// 下拒絕跨網域連線，請參考教學改用託管平台開啟網頁。</p>
+                    <div class="bg-gray-800/40 border border-gray-800 rounded-2xl rounded-tl-none p-4 text-sm text-gray-300 leading-relaxed shadow-sm">
+                        對話歷史已清除。大法師教練已重新歸零您的體感記憶！隨時可以開始新的訓練數據診斷！🏃‍♂️
                     </div>
-                `;
-                chatHistory.appendChild(errorBubble);
-                lucide.createIcons();
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-            }
-        });
+                </div>
+            `;
+        }
     </script>
 </body>
 </html>
