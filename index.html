@@ -10,8 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Marked.js (Markdown 解析器) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Garmin FIT SDK 官方 UMD 模組 -->
-    <script src="https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.143.0/dist/index.umd.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
@@ -54,9 +52,13 @@
                 <p class="text-xs text-gray-400 font-medium">Garmin Connect & 漢森訓練法專用儀表板</p>
             </div>
         </div>
-        <div class="flex items-center space-x-3">
-            <span id="apiStatusBadge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1">
-                <span class="w-2 h-2 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰
+        <div class="flex items-center space-x-2 md:space-x-3">
+            <!-- FIT 解碼器自癒狀態燈 -->
+            <span id="fitStatusBadge" class="px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex items-center">
+                <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse mr-1"></span> 偵測解碼器中
+            </span>
+            <span id="apiStatusBadge" class="px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰
             </span>
             <button onclick="toggleSettingsModal(true)" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition duration-150">
                 <i class="fa-solid fa-cog text-gray-300"></i>
@@ -217,7 +219,7 @@
                     <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">雲端推理模型大腦</label>
                     <select id="modelSelect" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-3 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400">
                         <option value="gemini-2.5-flash">Gemini 2.5 Flash (最推薦：反應極速且聰明)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (最相容：老舊設備連線穩定)</option>
+                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (最相容：連線超穩定)</option>
                         <option value="gemini-1.5-pro">Gemini 1.5 Pro (極度精密：複雜資料深度解析)</option>
                     </select>
                 </div>
@@ -272,11 +274,84 @@
         let parsedLapsData = null; // 儲存成功解析出來的跑步分段 JSON 數據
 
         // 初始化設定
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             initRpeSlider();
             initDragAndDrop();
             loadSavedSettings();
+            // 自愈式背景載入 FIT SDK
+            await autoLoadFitSdk();
         });
+
+        // 🔍 【獨創自癒載入器】動態載入與地毯式尋找 Garmin Fit SDK
+        async function autoLoadFitSdk() {
+            const badge = document.getElementById('fitStatusBadge');
+            
+            // 需要嘗試加載的正確 CDN 路徑（排除 404 的 index.umd.min.js）
+            const cdnUrls = [
+                "https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.143.0/dist/index.umd.js",
+                "https://unpkg.com/@garmin/fitsdk@21.143.0/dist/index.umd.js",
+                "https://cdn.jsdelivr.net/npm/@garmin/fitsdk/dist/index.umd.js"
+            ];
+
+            for (const url of cdnUrls) {
+                try {
+                    console.log(`[FIT Loader] 正在嘗試從 ${url} 載入模組...`);
+                    await injectScript(url);
+                    
+                    // 檢查是否成功載入並找到 SDK 物件
+                    const sdk = findFitSdkOnWindow();
+                    if (sdk) {
+                        console.log("[FIT Loader] 🎉 成功對接解密晶片！");
+                        badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1";
+                        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-1"></span> 解碼器已就緒`;
+                        return sdk;
+                    }
+                } catch (e) {
+                    console.warn(`[FIT Loader] 節點載入失敗: ${url}`, e);
+                }
+            }
+
+            // 全部載入失敗時的視覺化標記
+            badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1";
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-1"></span> 解碼器載入失敗`;
+            return null;
+        }
+
+        function injectScript(url) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = (e) => reject(e);
+                document.head.appendChild(script);
+            });
+        }
+
+        // 🔍 地毯式掃描全域 `window` 物件（100% 解決命名空間亂套的問題）
+        function findFitSdkOnWindow() {
+            // 優先找已知的命名路徑
+            if (window.GarminFitSdk && window.GarminFitSdk.Decoder) return window.GarminFitSdk;
+            if (window.garmin && window.garmin.Decoder) return window.garmin;
+            if (window.garmin && window.garmin.fit && window.garmin.fit.Decoder) return window.garmin.fit;
+            if (window.Fit && window.Fit.Decoder) return window.Fit;
+            if (window.FitSdk && window.FitSdk.Decoder) return window.FitSdk;
+
+            // 暴力地毯式掃描
+            for (const key in window) {
+                try {
+                    if (window[key] && typeof window[key] === 'object') {
+                        if (window[key].Decoder && window[key].Stream) {
+                            console.log(`[Scanner] 在 window.${key} 發現 Garmin Fit SDK！`);
+                            return window[key];
+                        }
+                    }
+                } catch (e) {
+                    // 忽略安全沙盒跨域存取報錯
+                }
+            }
+            return null;
+        }
 
         // 1. RPE 滑桿動態文字連動
         function initRpeSlider() {
@@ -337,50 +412,36 @@
 
             try {
                 if (file.name.endsWith('.fit')) {
-                    // 解密 .fit 二進位檔案
-                    fileRowsDisplay.innerText = "正在呼叫 Garmin 官方 SDK 核心解碼...";
+                    fileRowsDisplay.innerText = "正在解碼 .fit 檔案...";
                     const buffer = await file.arrayBuffer();
                     const uint8Array = new Uint8Array(buffer);
                     
-                    // 【終極防禦】全域動態尋找 Garmin Fit SDK，避免命名空間不一致
-                    let FitSdk = null;
-                    if (window.GarminFitSdk && window.GarminFitSdk.Decoder) {
-                        FitSdk = window.GarminFitSdk;
-                    } else if (window.garmin && window.garmin.Decoder) {
-                        FitSdk = window.garmin;
-                    } else if (window.Fit && window.Fit.Decoder) {
-                        FitSdk = window.Fit;
-                    } else if (window.garmin && window.garmin.fit && window.garmin.fit.Decoder) {
-                        FitSdk = window.garmin.fit;
-                    } else if (window.FitSdk && window.FitSdk.Decoder) {
-                        FitSdk = window.FitSdk;
-                    }
-
+                    // 掃描獲取 SDK 物件
+                    const FitSdk = findFitSdkOnWindow();
                     if (!FitSdk) {
-                        throw new Error("Garmin Fit 解碼模組未載入成功，請確認網路連線。");
+                        throw new Error("Garmin Fit 解碼模組未載入成功。請重新整理網頁，或檢查您的手機是否阻擋了外部 CDN 連線。");
                     }
                     
                     const { Decoder, Stream } = FitSdk;
                     const stream = Stream.fromByteArray(uint8Array);
                     const decoder = new Decoder(stream);
                     
-                    // 驗證檔案完整性
                     if (!decoder.isCorrectFileType()) {
-                        throw new Error("偵測到此檔案並非正確的 Garmin FIT 檔案格式。");
+                        throw new Error("此檔案損壞，或非標準 Garmin FIT 檔案格式。");
                     }
                     
                     const { messages } = decoder.read();
                     const laps = messages.lapMesgs || [];
                     
                     if (laps.length === 0) {
-                        throw new Error("解碼成功，但檔案中未發現分段 Laps 數據總結。");
+                        throw new Error("解碼成功，但檔案中找不到任何分段 Laps 數據紀錄。");
                     }
 
                     // 數據提煉與「5/6分速」物理公式換算
                     parsedLapsData = laps.map((lap, index) => {
                         const distanceKm = lap.totalDistance ? (lap.totalDistance / 1000).toFixed(2) : "N/A";
                         const timeSec = lap.totalTimerTime || lap.totalElapsedTime || 0;
-                        const avgSpeedMs = lap.avgSpeed; // Garmin 原始速度單位是 m/s
+                        const avgSpeedMs = lap.avgSpeed;
                         
                         // 跑步精準換算公式： 配速 (分/公里) = 16.666 / 速度 (m/s)
                         let formattedPace = "N/A";
@@ -403,7 +464,6 @@
                     fileRowsDisplay.innerText = `成功解析出 ${parsedLapsData.length} 個運動分段 Laps`;
 
                 } else if (file.name.endsWith('.json')) {
-                    // 解析普通 JSON 檔
                     const text = await file.text();
                     const json = JSON.parse(text);
                     const laps = json.laps || json.history || json;
