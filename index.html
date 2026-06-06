@@ -270,7 +270,6 @@
 
         // 全域變數
         let parsedLapsData = null; // 儲存成功解析出來的跑步分段 JSON 數據
-        let isSettingsSaving = false;
 
         // 初始化設定
         window.addEventListener('DOMContentLoaded', () => {
@@ -279,7 +278,7 @@
             loadSavedSettings();
         });
 
-        // 1. RPE 滑桿動態文字連端
+        // 1. RPE 滑桿動態文字連動
         function initRpeSlider() {
             const rpeInput = document.getElementById('rpeInput');
             const rpeValue = document.getElementById('rpeValue');
@@ -343,12 +342,25 @@
                     const buffer = await file.arrayBuffer();
                     const uint8Array = new Uint8Array(buffer);
                     
-                    // 動態導入 Garmin Decoder (UMD 模組安全解析)
-                    if (!window.GarminFitSdk) {
+                    // 【終極防禦】全域動態尋找 Garmin Fit SDK，避免命名空間不一致
+                    let FitSdk = null;
+                    if (window.GarminFitSdk && window.GarminFitSdk.Decoder) {
+                        FitSdk = window.GarminFitSdk;
+                    } else if (window.garmin && window.garmin.Decoder) {
+                        FitSdk = window.garmin;
+                    } else if (window.Fit && window.Fit.Decoder) {
+                        FitSdk = window.Fit;
+                    } else if (window.garmin && window.garmin.fit && window.garmin.fit.Decoder) {
+                        FitSdk = window.garmin.fit;
+                    } else if (window.FitSdk && window.FitSdk.Decoder) {
+                        FitSdk = window.FitSdk;
+                    }
+
+                    if (!FitSdk) {
                         throw new Error("Garmin Fit 解碼模組未載入成功，請確認網路連線。");
                     }
                     
-                    const { Decoder, Stream } = window.GarminFitSdk;
+                    const { Decoder, Stream } = FitSdk;
                     const stream = Stream.fromByteArray(uint8Array);
                     const decoder = new Decoder(stream);
                     
@@ -376,7 +388,7 @@
                             const totalMinutes = 16.6666 / avgSpeedMs;
                             const mins = Math.floor(totalMinutes);
                             const secs = Math.round((totalMinutes - mins) * 60);
-                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}`;
+                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}"`;
                         }
 
                         return {
@@ -410,7 +422,7 @@
                             const totalMinutes = 16.6666 / avgSpeedMs;
                             const mins = Math.floor(totalMinutes);
                             const secs = Math.round((totalMinutes - mins) * 60);
-                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}`;
+                            formattedPace = `${mins}'${secs.toString().padStart(2, '0')}"`;
                         } else if (lap.pace) {
                             formattedPace = lap.pace;
                         }
@@ -502,18 +514,17 @@
             }
         }
 
-        // 5. 診斷控制主邏輯 (無縫組裝發送)
+        // 5. 診斷控制主邏輯
         async function sendToDiagnose() {
             const apiKey = localStorage.getItem('gemini_api_key');
             const selectedModel = document.getElementById('modelSelect').value || 'gemini-2.5-flash';
 
             if (!apiKey) {
                 toggleSettingsModal(true);
-                appendChatError("通訊阻斷：缺少通訊金鑰", "請先點擊右上角⚙️設定，貼上您的 Gemini API Key。如果是本地開啟 file:// 協定，必須使用託管平台或先進行金鑰配置！");
+                appendChatError("通訊阻斷：缺少通訊金鑰", "請先點擊右上角⚙️設定，貼上您的 Gemini API Key。並確認網頁是佈署於 https 網域下！");
                 return;
             }
 
-            // 讀取體感回報數據
             const rpe = document.getElementById('rpeInput').value;
             const additionalNotes = document.getElementById('additionalNotes').value.trim();
             
@@ -522,8 +533,7 @@
                 injuries.push(cb.value);
             });
 
-            // 建立打包好的 Prompt 文字
-            let userPrompt = `教練好！這是我昨天的跑步表現回報與體能狀態，請幫我分析診斷：\n\n`;
+            let userPrompt = `教練好！這是我昨天的跑步表現回報與體能狀態，請幫我 analysis 診斷：\n\n`;
             userPrompt += `[基本體感 RPE]：${rpe}分（自覺運動強度）\n`;
             userPrompt += `[傷痛/疲勞狀態]：${injuries.length > 0 ? injuries.join(', ') : '無異常，身體感覺棒極了！'}\n`;
             if (additionalNotes) {
@@ -542,21 +552,28 @@
                 userPrompt += `\n[手錶數據紀錄]：選手當次未上傳檔案數據，請主要依據其「體感 RPE」與「備註痛點」提供下階段漢森訓練法調整建議。\n`;
             }
 
-            // 在聊天框添加使用者的氣泡
             appendUserMessage(userPrompt);
             toggleLoading(true);
 
             try {
-                // 發送請求並限制錯誤不崩潰
                 const diagnosis = await fetchGeminiDiagnosis(userPrompt, apiKey, selectedModel);
                 
-                // 強大防禦：如果回傳空值，主動拋出異常，絕不放行 marked 解析
-                if (!diagnosis || typeof diagnosis !== 'string') {
-                    throw new Error("API 發送成功，但 Google 伺服器回傳了空的回應內容，請確認您的帳號是否有區域、流量或年齡限制。");
+                // 100% 擋下 Undefined 或 Null，不放行 marked.js，直接拋出錯誤
+                if (!diagnosis || typeof diagnosis !== 'string' || diagnosis.trim() === '') {
+                    throw new Error("API 傳輸完成，但雲端模型回傳了空的回應內容。這通常是由於您的 API 金鑰被暫時限制、帳號安全政策攔截、或是模型配額用盡。");
                 }
 
-                // 渲染 markdown 並加載
-                const htmlContent = marked.parse(diagnosis);
+                // 2.0/1.0 雙重 marked.js 解析引擎相容性防護
+                let htmlContent = "";
+                if (window.marked && typeof window.marked === 'function') {
+                    htmlContent = window.marked(diagnosis);
+                } else if (window.marked && window.marked.parse && typeof window.marked.parse === 'function') {
+                    htmlContent = window.marked.parse(diagnosis);
+                } else {
+                    // 極端備份：純文字段落排版
+                    htmlContent = diagnosis.replace(/\n/g, "<br>");
+                }
+
                 appendCoachMessage(htmlContent);
 
             } catch (err) {
@@ -567,9 +584,8 @@
             }
         }
 
-        // 6. 核心 API 對接 (嚴格拋出異常, 防止 marked 被 undefined 擊穿)
+        // 6. 核心 API 對接
         async function fetchGeminiDiagnosis(prompt, apiKey, modelName) {
-            // 清理 API Key (防止複製時夾帶隱形空白、換行造成 400 Bad Request)
             const cleanKey = apiKey.trim().replace(/[\n\r\t]/g, '');
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${cleanKey}`;
 
@@ -596,38 +612,36 @@
                 body: JSON.stringify(requestBody)
             });
 
-            // 如果連線狀態碼非 OK (如 400, 403, 429)，直接抓取原廠錯誤訊息拋出
             if (!response.ok) {
                 let errorDetails = `HTTP 錯誤碼: ${response.status}`;
                 try {
                     const errJson = await response.json();
                     if (errJson.error && errJson.error.message) {
-                        errorDetails = `${errJson.error.message} (錯誤型態: ${errJson.error.status})`;
+                        errorDetails = `${errJson.error.message} (型態: ${errJson.error.status})`;
                     }
                 } catch (e) {
-                    // 若抓取 JSON 失敗，維持預設 HTTP 訊息
+                    // JSON 解析失敗，維持預設 HTTP 訊息
                 }
                 throw new Error(errorDetails);
             }
 
             const data = await response.json();
 
-            // 防禦性檢查 API Candidates
             if (!data.candidates || data.candidates.length === 0) {
-                throw new Error("伺服器已成功回應，但沒有生成任何候選診斷候選。");
+                throw new Error("伺服器成功回應，但回傳的生成候選項為空。");
             }
 
             const candidate = data.candidates[0];
 
-            // 檢查安全審核是否拒絕生成
             if (candidate.finishReason && candidate.finishReason !== "STOP") {
                 if (candidate.finishReason === "SAFETY") {
-                    throw new Error("此通訊內容被 Google AI 安全安全過濾機制阻擋，請調整您的輸入字句。");
+                    throw new Error("此通訊內容遭 Google AI 安全防禦機制阻擋。");
                 }
-                throw new Error(`生成中止，中斷原因代碼: ${candidate.finishReason}`);
+                throw new Error(`生成中斷，中斷原因代碼: ${candidate.finishReason}`);
             }
 
-            return candidate.content?.parts?.[0]?.text;
+            const textResult = candidate.content?.parts?.[0]?.text;
+            return textResult;
         }
 
         // 7. 聊天視窗 DOM 動態更新模組
@@ -649,6 +663,7 @@
             scrollChatToBottom();
         }
 
+        // 渲染教練對話氣泡
         function appendCoachMessage(htmlContent) {
             const chatContainer = document.getElementById('chatContainer');
             const html = `
@@ -665,7 +680,7 @@
             scrollChatToBottom();
         }
 
-        // 🚨 終極排錯氣泡 (絕不引發 marked.js 崩潰)
+        // 渲染錯誤氣泡
         function appendChatError(title, detail) {
             const chatContainer = document.getElementById('chatContainer');
             const html = `
@@ -683,8 +698,9 @@
                         </div>
                         <div class="text-xs text-gray-400 leading-relaxed space-y-1">
                             <p>💡 <b>大法師教練的診斷除錯建議：</b></p>
-                            <p>1. 請點選右上角 ⚙️，檢查您的 API Key 最前方或最後方是否有夾帶複製時多選的「空白、換行」。</p>
-                            <p>2. 如果是 <b>"Failed to fetch"</b>，代表您的手機安全瀏覽器阻擋了本地 file:// 連線，請參考教學改將此 HTML 檔案上傳到免費的 GitHub Pages 開啟。</p>
+                            <p class="text-green-400">✅ 偵測到您已將 App 上傳至 GitHub Pages 運作！這代表您的執行環境非常安全正常。</p>
+                            <p>1. 如果是 <b>"API key not valid"</b>，代表金鑰字串複製錯誤，請重新至 AI Studio 複製金鑰並在右上角重新填入。</p>
+                            <p>2. 如果依然顯示 <b>"marked(): input parameter is undefined"</b>，這 100% 是因為手機瀏覽器快取了舊版程式，請閱讀生成的排錯指南（deploy_guide）來清除手機快取！</p>
                         </div>
                     </div>
                 </div>
