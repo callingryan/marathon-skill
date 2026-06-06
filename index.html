@@ -39,7 +39,7 @@
         }
     </style>
 </head>
-<body class="h-screen overflow-hidden flex flex-col">
+<body class="h-[100dvh] overflow-hidden flex flex-col">
 
     <!-- 頂部 Garmin 風格導覽列 -->
     <header class="bg-[#111827] border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10 shrink-0">
@@ -48,16 +48,16 @@
                 <i class="fa-solid fa-person-running text-green-400 text-xl animate-pulse"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold tracking-wider text-white">大法師馬拉松隨身教練</h1>
-                <p class="text-xs text-gray-400 font-medium">Garmin Connect & 漢森訓練法專用儀表板</p>
+                <h1 class="text-sm md:text-lg font-bold tracking-wider text-white">大法師馬拉松隨身教練</h1>
+                <p class="text-[10px] md:text-xs text-gray-400 font-medium">Garmin Connect & 漢森訓練法專用儀表板</p>
             </div>
         </div>
         <div class="flex items-center space-x-2 md:space-x-3">
             <!-- 內建 FIT 解碼器狀態燈 (100% 內建免下載，永久綠燈) -->
-            <span class="px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span> 內建解碼器已就緒
+            <span class="px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span> 內建已就緒
             </span>
-            <span id="apiStatusBadge" class="px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1">
+            <span id="apiStatusBadge" class="px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰
             </span>
             <button onclick="toggleSettingsModal(true)" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition duration-150">
@@ -67,24 +67,24 @@
     </header>
 
     <!-- 主畫面容器 -->
-    <main class="flex-1 overflow-hidden flex flex-col md:flex-row">
+    <main class="flex-1 overflow-hidden flex flex-col md:flex-row relative">
         
-        <!-- 左側：控制面板 & 數據上傳 -->
-        <section class="w-full md:w-[420px] bg-[#111827] border-r border-gray-800 flex flex-col h-1/2 md:h-full shrink-0 overflow-y-auto no-scrollbar">
+        <!-- 左側：控制面板 & 數據上傳 (手機版支援摺疊收合) -->
+        <section id="controlPanel" class="w-full md:w-[420px] bg-[#111827] border-r border-gray-800 flex flex-col h-[35%] md:h-full shrink-0 overflow-y-auto no-scrollbar transition-all duration-300">
             <!-- 區塊 1: 數據上傳區 -->
             <div class="p-5 border-b border-gray-800">
                 <h2 class="text-xs font-bold tracking-widest text-gray-400 uppercase mb-3">數據解碼通道</h2>
-                <div id="dropzone" class="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-green-400/50 hover:bg-green-500/[0.02] transition duration-200 flex flex-col items-center justify-center min-h-[160px]">
+                <div id="dropzone" class="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-green-400/50 hover:bg-green-500/[0.02] transition duration-200 flex flex-col items-center justify-center min-h-[140px]">
                     <input type="file" id="fileInput" accept=".fit,.json" class="hidden" />
                     <div id="uploadPrompt">
-                        <i class="fa-solid fa-file-invoice text-4xl text-gray-500 mb-3 block"></i>
-                        <span class="text-sm font-semibold text-gray-300 block mb-1">上傳 Garmin 原始數據</span>
-                        <span class="text-xs text-gray-500 block">支援拖曳 .fit 檔或 .json 分段檔案</span>
+                        <i class="fa-solid fa-file-invoice text-3xl text-gray-500 mb-2 block"></i>
+                        <span class="text-xs font-semibold text-gray-300 block mb-1">上傳 Garmin 原始數據</span>
+                        <span class="text-[10px] text-gray-500 block">支援拖曳 .fit 檔或 .json 分段檔案</span>
                     </div>
                     <div id="uploadSuccess" class="hidden text-center">
-                        <i class="fa-solid fa-circle-check text-4xl text-green-400 mb-3"></i>
-                        <span id="fileNameDisplay" class="text-sm font-bold text-white block truncate max-w-[280px]">檔案載入成功</span>
-                        <span id="fileRowsDisplay" class="text-xs text-green-400 block mt-1 font-mono">成功解析出 0 個分段 Laps</span>
+                        <i class="fa-solid fa-circle-check text-3xl text-green-400 mb-2"></i>
+                        <span id="fileNameDisplay" class="text-xs font-bold text-white block truncate max-w-[280px]">檔案載入成功</span>
+                        <span id="fileRowsDisplay" class="text-[10px] text-green-400 block mt-1 font-mono">成功解析出 0 個分段 Laps</span>
                     </div>
                 </div>
             </div>
@@ -141,7 +141,7 @@
                 <!-- 額外備註 -->
                 <div>
                     <label class="text-sm font-medium text-gray-300 block mb-2">額外細節（如：天氣悶熱、值班睡眠不足等）</label>
-                    <textarea id="additionalNotes" rows="3" class="w-full bg-gray-800 rounded-xl p-3 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400 border border-gray-700 placeholder-gray-500" placeholder="大法師教練：『小老弟，今天狀態有什麼反常嗎？寫下來，我們一併評估！』"></textarea>
+                    <textarea id="additionalNotes" rows="2" class="w-full bg-gray-800 rounded-xl p-3 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400 border border-gray-700 placeholder-gray-500" placeholder="大法師教練：『小老弟，今天狀態有什麼反常嗎？寫下來，我們一併評估！』"></textarea>
                 </div>
                 
                 <!-- 啟動按鈕 -->
@@ -152,22 +152,29 @@
             </div>
         </section>
 
-        <!-- 右側：診斷對話室 -->
-        <section class="flex-1 bg-[#0b0f19] flex flex-col h-1/2 md:h-full overflow-hidden relative">
+        <!-- 右側：診斷對話室 (自適應高寬度，防遮擋遮罩) -->
+        <section id="chatSection" class="flex-1 bg-[#0b0f19] flex flex-col h-[65%] md:h-full overflow-hidden relative transition-all duration-300">
             <!-- 聊天室頂部 -->
-            <div class="bg-[#111827]/50 border-b border-gray-800/60 px-6 py-3.5 flex items-center justify-between shrink-0">
+            <div class="bg-[#111827]/50 border-b border-gray-800/60 px-6 py-3 flex items-center justify-between shrink-0">
                 <div class="flex items-center space-x-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse"></span>
                     <span class="text-xs font-bold tracking-wider text-gray-300 uppercase">診斷對話室</span>
                 </div>
-                <button onclick="clearChatHistory()" class="text-xs font-medium text-gray-500 hover:text-red-400 transition flex items-center space-x-1.5">
-                    <i class="fa-solid fa-trash-can"></i>
-                    <span>清除歷史</span>
-                </button>
+                <div class="flex items-center space-x-2.5">
+                    <!-- 手機專屬：滿版對話切換鍵 -->
+                    <button id="togglePanelBtn" onclick="toggleMobilePanel()" class="md:hidden px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-[11px] font-semibold text-gray-300 flex items-center space-x-1 border border-gray-700 transition">
+                        <i id="togglePanelIcon" class="fa-solid fa-expand"></i>
+                        <span id="togglePanelText">滿版對話</span>
+                    </button>
+                    <button onclick="clearChatHistory()" class="text-xs font-medium text-gray-500 hover:text-red-400 transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span class="hidden xs:inline">清除歷史</span>
+                    </button>
+                </div>
             </div>
 
-            <!-- 聊天內容滾動區 -->
-            <div id="chatContainer" class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- 聊天內容滾動區 (pb-36 用來防範底部被手機網址列與工具列切割吃字) -->
+            <div id="chatContainer" class="flex-1 overflow-y-auto p-6 pb-32 space-y-6 scroll-smooth">
                 <!-- 預設教練歡迎對話 -->
                 <div class="flex items-start space-x-3 max-w-[85%]">
                     <div class="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
@@ -213,7 +220,7 @@
                             <i id="apiKeyEyeIcon" class="fa-solid fa-eye-slash"></i>
                         </button>
                     </div>
-                    <p class="text-[10px] text-gray-500 mt-1.5 leading-relaxed">金鑰將僅儲存於本機瀏覽器的 `localStorage` 中，不會以任何形式回傳或公開，絕對確保您的個資與通訊隱私。</p>
+                    <p class="text-[10px] text-gray-500 mt-1.5 leading-relaxed">金鑰將僅儲存於本機瀏覽器的 `localStorage` 中，絕對確保您的個資與通訊隱私。</p>
                 </div>
                 <div>
                     <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">優先呼叫之推理大腦</label>
@@ -272,6 +279,7 @@
 
         // 全域變數
         let parsedLapsData = null; // 儲存成功解析出來的跑步分段 JSON 數據
+        let isMobilePanelCollapsed = false; // 手機版數據控制台是否摺疊
 
         // 初始化設定
         window.addEventListener('DOMContentLoaded', () => {
@@ -279,6 +287,30 @@
             initDragAndDrop();
             loadSavedSettings();
         });
+
+        // 📱 手機版控制台摺疊切換 (點選後對話室將無阻礙放大至近 100% 滿版)
+        function toggleMobilePanel() {
+            const panel = document.getElementById('controlPanel');
+            const toggleIcon = document.getElementById('togglePanelIcon');
+            const toggleText = document.getElementById('togglePanelText');
+            
+            isMobilePanelCollapsed = !isMobilePanelCollapsed;
+            
+            if (isMobilePanelCollapsed) {
+                // 折疊控制台 -> 滿版聊天
+                panel.classList.add('hidden');
+                toggleIcon.className = "fa-solid fa-compress";
+                toggleText.innerText = "顯示數據台";
+            } else {
+                // 展開控制台
+                panel.classList.remove('hidden');
+                toggleIcon.className = "fa-solid fa-expand";
+                toggleText.innerText = "滿版對話";
+            }
+            
+            // 校正滾動貼底
+            scrollChatToBottom();
+        }
 
         // 1. RPE 滑桿動態文字連動
         function initRpeSlider() {
@@ -638,6 +670,11 @@
                 return;
             }
 
+            // 💡 手機端貼心體驗：發送診斷時自動進入「滿版對話」狀態，避免被數據控制台壓縮！
+            if (window.innerWidth < 768 && !isMobilePanelCollapsed) {
+                toggleMobilePanel();
+            }
+
             const rpe = document.getElementById('rpeInput').value;
             const additionalNotes = document.getElementById('additionalNotes').value.trim();
             
@@ -707,7 +744,6 @@
             if (modelName !== 'gemini-3.5-flash') modelQueue.push('gemini-3.5-flash');
             if (modelName !== 'gemini-3.1-flash-lite') modelQueue.push('gemini-3.1-flash-lite');
             if (modelName !== 'gemini-3.1-pro') modelQueue.push('gemini-3.1-pro');
-            if (modelName !== 'gemini-1.5-flash') modelQueue.push('gemini-1.5-flash'); // 最底線極端備份
 
             let lastError = null;
 
@@ -859,12 +895,24 @@
             else overlay.classList.add('hidden');
         }
 
+        // 🚀 【微秒級動態追踪捲動鎖定系統】
+        // 解決 Markdown 漸進渲染時高度不對稱，導致滾動條懸空吃字的經典前端 Bug
         function scrollChatToBottom() {
             const chatContainer = document.getElementById('chatContainer');
-            chatContainer.scrollTo({
-                top: chatContainer.scrollHeight,
-                behavior: 'smooth'
-            });
+            if (!chatContainer) return;
+            
+            // 立即執行第一次粗重捲動
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // 建立持續追蹤，每 100ms 貼齊一次，直到 markdown 完全渲染完畢為止
+            let count = 0;
+            const scrollInterval = setInterval(() => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                count++;
+                if (count > 15) { // 1.5 秒後停止追蹤，防範效能耗損
+                    clearInterval(scrollInterval);
+                }
+            }, 100);
         }
 
         function clearChatHistory() {
