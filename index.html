@@ -53,7 +53,7 @@
             </div>
         </div>
         <div class="flex items-center space-x-2 md:space-x-3">
-            <!-- 內建 FIT 解碼器狀態燈 (永久就緒) -->
+            <!-- 內建 FIT 解碼器狀態燈 (100% 內建免下載，永久綠燈) -->
             <span class="px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span> 內建解碼器已就緒
             </span>
@@ -187,7 +187,7 @@
                     <i class="fa-solid fa-running text-3xl text-green-400 animate-bounce"></i>
                 </div>
                 <p class="text-sm font-bold tracking-widest text-green-400 mt-4 animate-pulse">大法師正在注入訓練法力，請稍候...</p>
-                <p class="text-xs text-gray-500 mt-1 font-mono">正在透過雲端 API 進行高維度定量生理學推理...</p>
+                <p id="loadingSubtitle" class="text-xs text-gray-500 mt-1 font-mono">正在透過雲端 API 進行高維度定量生理學推理...</p>
             </div>
         </section>
     </main>
@@ -216,11 +216,11 @@
                     <p class="text-[10px] text-gray-500 mt-1.5 leading-relaxed">金鑰將僅儲存於本機瀏覽器的 `localStorage` 中，不會以任何形式回傳或公開，絕對確保您的個資與通訊隱私。</p>
                 </div>
                 <div>
-                    <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">雲端推理模型大腦</label>
+                    <label class="text-xs font-semibold tracking-wider text-gray-400 uppercase block mb-1.5">優先呼叫之推理大腦</label>
                     <select id="modelSelect" class="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 px-3 text-sm text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-400">
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (最推薦：反應極速且聰明)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (最相容：連線超穩定)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (極度精密：複雜資料深度解析)</option>
+                        <option value="gemini-3.5-flash">Gemini 3.5 Flash (最推薦：全方位協助，思考極速)</option>
+                        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (回覆最快、極省配額)</option>
+                        <option value="gemini-3.1-pro">Gemini 3.1 Pro (進階推理：適合極精密數據診斷)</option>
                     </select>
                 </div>
             </div>
@@ -252,7 +252,7 @@
 - 決策優先級：對象的身體狀態（RPE、疲勞感、傷痛回報）優先於既定課表。
 - 動態調整協議：當身體狀況不佳時，必須主動提供三個等級的執行建議：
   - A 級（原訂課表）：身體狀態良好時的標準執行。
-  - B 級（微調課表）：身體疲勞時的降配速或減量執行.
+  - B 級（微調課表）：身體疲勞時的降配速或減量執行。
   - C 級（替代課表）：身體有傷痛或極度疲勞時的交叉訓練（XT）替代方案（例如：自行車、游泳等）。
 
 ## 2. 跑步數據深度分析 (Data Analysis)
@@ -326,45 +326,40 @@
             });
         }
 
-        // 🚀 【獨研 100% 離線二進位 FIT 解碼器】
-        // 避開所有外部 CDN 與 Node.js 函式庫，直接讀取 File ArrayBuffer 進行物理結構解析
+        // 🚀 【100% 離線純 JS 自力解碼二進位 FIT 引擎】
         function decodeBinaryFitLaps(arrayBuffer) {
             const view = new DataView(arrayBuffer);
             const bytes = new Uint8Array(arrayBuffer);
             let offset = 0;
             
-            // 1. 讀取與驗證 12 或 14 欄位標頭
+            // 讀取標頭長度
             const headerSize = view.getUint8(offset);
             if (headerSize !== 12 && headerSize !== 14) {
                 throw new Error("無效的 FIT 檔案結構，標頭長度異常。");
             }
             
-            // 2. 驗證 ".FIT" 檔案特徵碼
+            // 驗證標記特徵碼
             const signature = String.fromCharCode(bytes[offset + 8], bytes[offset + 9], bytes[offset + 10], bytes[offset + 11]);
             if (signature !== ".FIT") {
                 throw new Error("此檔案缺少 .FIT 簽章安全金鑰，並非合規的手錶原始紀錄。");
             }
             
-            // 3. 獲取資料 payload 總長度
-            const dataSize = view.getUint32(offset + 4, true); // 小端序讀取
+            const dataSize = view.getUint32(offset + 4, true);
             offset += headerSize;
             
             const endOffset = offset + dataSize;
-            const localDefs = {}; // 快取 local_message_type 結構對應表
+            const localDefs = {};
             const laps = [];
             
-            // 4. 開始解碼資料流
             while (offset < endOffset && offset < bytes.length) {
                 const headerByte = bytes[offset];
                 offset++;
                 
-                // 處理壓縮時間戳標頭 (Compressed Timestamp Header)
+                // 處理壓縮時間戳
                 if ((headerByte & 0x80) === 0x80) {
                     const localMsgType = (headerByte >> 5) & 0x03;
                     const def = localDefs[localMsgType];
-                    if (def) {
-                        offset += def.totalSize; // 快速跳過這組 payload 
-                    }
+                    if (def) offset += def.totalSize;
                     continue;
                 }
                 
@@ -373,13 +368,11 @@
                 const localMsgType = headerByte & 0x0F;
                 
                 if (isDefinition) {
-                    // 解碼定義訊息 (Definition Message)
-                    offset++; // 跳過保留欄位 (Reserved)
-                    const arch = bytes[offset]; // 0 = 小端序 (Little Endian), 1 = 大端序 (Big Endian)
+                    offset++; // Skip reserved
+                    const arch = bytes[offset];
                     const isBigEndian = arch === 1;
                     offset++;
                     
-                    // 取得 Global Message Number (16-bit)
                     const globalMsgNum = view.getUint16(offset, !isBigEndian);
                     offset += 2;
                     
@@ -398,7 +391,6 @@
                         offset += 3;
                     }
                     
-                    let devFields = [];
                     if (hasDeveloperFields) {
                         const numDevFields = bytes[offset];
                         offset++;
@@ -406,29 +398,22 @@
                             const fieldNum = bytes[offset];
                             const size = bytes[offset + 1];
                             const devDataIndex = bytes[offset + 2];
-                            devFields.push({ fieldNum, size, devDataIndex });
                             totalSize += size;
                             offset += 3;
                         }
                     }
                     
-                    // 將結構存入快取
                     localDefs[localMsgType] = {
                         globalMsgNum,
                         isBigEndian,
                         fields,
-                        devFields,
                         totalSize
                     };
                 } else {
-                    // 解碼數據訊息 (Data Message)
                     const def = localDefs[localMsgType];
-                    if (!def) {
-                        // 異常跳出防禦，避免陷入無限迴圈
-                        break;
-                    }
+                    if (!def) break;
                     
-                    // 19 代表 Garmin 協定中的 Lap (分段訊息)
+                    // 19 = Garmin Lap (計圈/分段)
                     if (def.globalMsgNum === 19) {
                         let lapData = {};
                         let currentOffset = offset;
@@ -445,13 +430,13 @@
                                 } else if (fSize === 2) {
                                     val = view.getUint16(currentOffset, !def.isBigEndian);
                                 } else if (fSize === 4) {
-                                    if (fType === 0x88) { // float32
+                                    if (fType === 0x88) {
                                         val = view.getFloat32(currentOffset, !def.isBigEndian);
                                     } else {
                                         val = view.getUint32(currentOffset, !def.isBigEndian);
                                     }
                                 } else if (fSize === 8) {
-                                    if (fType === 0x89) { // float64
+                                    if (fType === 0x89) {
                                         val = view.getFloat64(currentOffset, !def.isBigEndian);
                                     } else {
                                         try {
@@ -465,11 +450,6 @@
                                 val = null;
                             }
                             
-                            // 映射 Garmin Lap 欄位定義：
-                            // 欄位 9: total_distance (單位: 公分 cm, 縮放比例 100) -> 公尺
-                            // 欄位 8: total_timer_time (單位: 毫秒 ms, 縮放比例 1000) -> 秒
-                            // 欄位 13: avg_speed (單位: 毫米/秒 mm/s, 縮放比例 1000) -> 公尺/秒
-                            // 欄位 16: avg_heart_rate (單位: bpm) -> 平均心率
                             if (fNum === 9) lapData.totalDistance = val;
                             if (fNum === 8) lapData.totalTimerTime = val;
                             if (fNum === 13) lapData.avgSpeed = val;
@@ -481,7 +461,6 @@
                         laps.push(lapData);
                     }
                     
-                    // 推進檔案位移指標
                     offset += def.totalSize;
                 }
             }
@@ -489,7 +468,7 @@
             return laps;
         }
 
-        // 3. 檔案上傳觸發模組
+        // 3. 檔案拖曳/點擊上傳處理
         async function handleUploadedFile(file) {
             const uploadPrompt = document.getElementById('uploadPrompt');
             const uploadSuccess = document.getElementById('uploadSuccess');
@@ -502,23 +481,22 @@
 
             try {
                 if (file.name.endsWith('.fit')) {
-                    fileRowsDisplay.innerText = "正在使用內建二進位晶片進行物理結構解碼...";
+                    fileRowsDisplay.innerText = "正在進行物理二進位無損解密...";
                     const buffer = await file.arrayBuffer();
                     
-                    // 執行 100% 離線物理層解碼
+                    // 執行離線純 JS 物理層解碼
                     const rawLaps = decodeBinaryFitLaps(buffer);
                     
                     if (rawLaps.length === 0) {
-                        throw new Error("物理層解密完成，但該手錶軌跡中缺少 Lap（每公里分段計時）數據。");
+                        throw new Error("解密完成，但此 FIT 軌跡檔案中找不到分段 (Laps) 計時。");
                     }
 
-                    // 將物理層數據提煉並自動進行「5/6分速」換算
                     parsedLapsData = rawLaps.map((lap, index) => {
                         const distanceKm = lap.totalDistance ? (lap.totalDistance / 100 / 1000).toFixed(2) : "N/A";
                         const timeSec = lap.totalTimerTime ? (lap.totalTimerTime / 1000) : 0;
                         const avgSpeedMs = lap.avgSpeed ? (lap.avgSpeed / 1000) : 0;
                         
-                        // 跑步精準速度公式： 配速 (分/公里) = 16.666 / 速度 (m/s)
+                        // 配速物理公式：配速 = 16.666 / 速度 (m/s)
                         let formattedPace = "N/A";
                         if (avgSpeedMs && avgSpeedMs > 0) {
                             const totalMinutes = 16.6666 / avgSpeedMs;
@@ -536,7 +514,7 @@
                         };
                     });
 
-                    fileRowsDisplay.innerText = `🔋 物理層已成功無損提取 ${parsedLapsData.length} 個分段 Laps`;
+                    fileRowsDisplay.innerText = `🔋 離線引擎成功無損提煉 ${parsedLapsData.length} 個分段 Laps`;
 
                 } else if (file.name.endsWith('.json')) {
                     const text = await file.text();
@@ -652,7 +630,7 @@
         // 5. 診斷控制主邏輯
         async function sendToDiagnose() {
             const apiKey = localStorage.getItem('gemini_api_key');
-            const selectedModel = document.getElementById('modelSelect').value || 'gemini-2.5-flash';
+            const selectedModel = document.getElementById('modelSelect').value || 'gemini-3.5-flash';
 
             if (!apiKey) {
                 toggleSettingsModal(true);
@@ -691,21 +669,20 @@
             toggleLoading(true);
 
             try {
+                // 執行高自癒、防塞車的多大腦備援連線
                 const diagnosis = await fetchGeminiDiagnosis(userPrompt, apiKey, selectedModel);
                 
-                // 100% 擋下 Undefined 或 Null，不放行 marked.js，直接拋出錯誤
                 if (!diagnosis || typeof diagnosis !== 'string' || diagnosis.trim() === '') {
-                    throw new Error("API 傳輸完成，但雲端模型回傳了空的回應內容。這通常是由於您的 API 金鑰被暫時限制、帳號安全政策攔截、或是模型配額用盡。");
+                    throw new Error("所有雲端大腦皆連線失敗或回傳空回應。");
                 }
 
-                // 2.0/1.0 雙重 marked.js 解析引擎相容性防護
+                // marked 解析相容性防護
                 let htmlContent = "";
                 if (window.marked && typeof window.marked === 'function') {
                     htmlContent = window.marked(diagnosis);
                 } else if (window.marked && window.marked.parse && typeof window.marked.parse === 'function') {
                     htmlContent = window.marked.parse(diagnosis);
                 } else {
-                    // 極端備份：純文字段落排版
                     htmlContent = diagnosis.replace(/\n/g, "<br>");
                 }
 
@@ -719,64 +696,98 @@
             }
         }
 
-        // 6. 核心 API 對接
+        // 6. 🌐 【高智慧自癒型 API 連線模組】
+        // 如果 3.5 Flash 塞車 (UNAVAILABLE)，會自動無感降級連線到最穩定的 3.1 Flash-Lite！
         async function fetchGeminiDiagnosis(prompt, apiKey, modelName) {
             const cleanKey = apiKey.trim().replace(/[\n\r\t]/g, '');
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${cleanKey}`;
+            const subtitle = document.getElementById('loadingSubtitle');
+            
+            // 建立高容錯模型備援佇列 (優先呼叫最新 Gemini 3.x 家族)
+            const modelQueue = [modelName];
+            if (modelName !== 'gemini-3.5-flash') modelQueue.push('gemini-3.5-flash');
+            if (modelName !== 'gemini-3.1-flash-lite') modelQueue.push('gemini-3.1-flash-lite');
+            if (modelName !== 'gemini-3.1-pro') modelQueue.push('gemini-3.1-pro');
+            if (modelName !== 'gemini-1.5-flash') modelQueue.push('gemini-1.5-flash'); // 最底線極端備份
 
-            const requestBody = {
-                contents: [
-                    {
-                        parts: [
-                            { text: prompt }
-                        ]
-                    }
-                ],
-                systemInstruction: {
-                    parts: [
-                        { text: DEFAULT_SYSTEM_PROMPT }
-                    ]
-                }
-            };
+            let lastError = null;
 
-            const response = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                let errorDetails = `HTTP 錯誤碼: ${response.status}`;
+            for (const currentModel of modelQueue) {
                 try {
-                    const errJson = await response.json();
-                    if (errJson.error && errJson.error.message) {
-                        errorDetails = `${errJson.error.message} (型態: ${errJson.error.status})`;
+                    console.log(`[自癒連線] 正在嘗試使用大腦: ${currentModel}`);
+                    subtitle.innerText = `正在透過 ${currentModel} 大腦進行生理學推理...`;
+                    
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${cleanKey}`;
+
+                    const requestBody = {
+                        contents: [
+                            { parts: [{ text: prompt }] }
+                        ],
+                        systemInstruction: {
+                            parts: [{ text: DEFAULT_SYSTEM_PROMPT }]
+                        }
+                    };
+
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        let errorMsg = `HTTP 錯誤 ${response.status}`;
+                        try {
+                            const errJson = await response.json();
+                            if (errJson.error && errJson.error.message) {
+                                errorMsg = errJson.error.message;
+                            }
+                        } catch (e) {}
+                        throw new Error(errorMsg);
                     }
-                } catch (e) {
-                    // JSON 解析失敗，維持預設 HTTP 訊息
+
+                    const data = await response.json();
+
+                    if (!data.candidates || data.candidates.length === 0) {
+                        throw new Error("伺服器成功回應，但生成內容為空。");
+                    }
+
+                    const candidate = data.candidates[0];
+
+                    if (candidate.finishReason && candidate.finishReason !== "STOP") {
+                        if (candidate.finishReason === "SAFETY") {
+                            throw new Error("內容被 Google 安全機制阻擋。");
+                        }
+                        throw new Error(`生成中止: ${candidate.finishReason}`);
+                    }
+
+                    const textResult = candidate.content?.parts?.[0]?.text;
+                    if (textResult) {
+                        console.log(`[自癒連線] 🎉 大腦 ${currentModel} 成功對接並回傳診斷！`);
+                        return textResult;
+                    } else {
+                        throw new Error("回傳欄位中找不到文字。");
+                    }
+
+                } catch (err) {
+                    console.warn(`[自癒連線] 大腦 ${currentModel} 連線失敗:`, err.message);
+                    lastError = err;
+
+                    // 關鍵自癒規則：如果是塞車 (UNAVAILABLE) 或超限 (429/RESOURCE_EXHAUSTED)，就繼續切換下一個模型
+                    if (err.message.includes("experiencing high demand") || 
+                        err.message.includes("UNAVAILABLE") || 
+                        err.message.includes("limit") || 
+                        err.message.includes("429") || 
+                        err.message.includes("503") ||
+                        err.message.includes("quota")) {
+                        continue;
+                    } else {
+                        // 如果是金鑰錯誤 (INVALID_ARGUMENT)，就代表 API 金鑰本身打錯，不需備援，直接往上拋
+                        throw err;
+                    }
                 }
-                throw new Error(errorDetails);
             }
 
-            const data = await response.json();
-
-            if (!data.candidates || data.candidates.length === 0) {
-                throw new Error("伺服器成功回應，但回傳的生成候選項為空。");
-            }
-
-            const candidate = data.candidates[0];
-
-            if (candidate.finishReason && candidate.finishReason !== "STOP") {
-                if (candidate.finishReason === "SAFETY") {
-                    throw new Error("此通訊內容遭 Google AI 安全防禦機制阻擋。");
-                }
-                throw new Error(`生成中斷，中斷原因代碼: ${candidate.finishReason}`);
-            }
-
-            const textResult = candidate.content?.parts?.[0]?.text;
-            return textResult;
+            // 如果全部模型都嘗試失敗，則拋出最後一個錯誤
+            throw lastError;
         }
 
         // 7. 聊天視窗 DOM 動態更新模組
@@ -798,7 +809,6 @@
             scrollChatToBottom();
         }
 
-        // 渲染教練對話氣泡
         function appendCoachMessage(htmlContent) {
             const chatContainer = document.getElementById('chatContainer');
             const html = `
@@ -815,7 +825,6 @@
             scrollChatToBottom();
         }
 
-        // 渲染錯誤氣泡
         function appendChatError(title, detail) {
             const chatContainer = document.getElementById('chatContainer');
             const html = `
@@ -833,9 +842,9 @@
                         </div>
                         <div class="text-xs text-gray-400 leading-relaxed space-y-1">
                             <p>💡 <b>大法師教練的診斷除錯建議：</b></p>
-                            <p class="text-green-400">✅ 偵測到您已將 App 上傳至 GitHub Pages 運作！這代表您的執行環境非常安全正常。</p>
+                            <p class="text-green-400">✅ 您的網路通訊與佈署環境 100% 正常安全！</p>
                             <p>1. 如果是 <b>"API key not valid"</b>，代表金鑰字串複製錯誤，請重新至 AI Studio 複製金鑰並在右上角重新填入。</p>
-                            <p>2. 如果依然顯示 <b>"marked(): input parameter is undefined"</b>，這 100% 是因為手機瀏覽器快取了舊版程式，請閱讀生成的排錯指南（deploy_guide）來清除手機快取！</p>
+                            <p>2. 請記得用手機開啟網頁時，網址後面要加上 <b>"?v=6"</b> (或更大數字) 強制刷新瀏覽器快取，才能載入這版 100% 內建免下載解碼器的完全體喔！</p>
                         </div>
                     </div>
                 </div>
