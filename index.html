@@ -53,11 +53,11 @@
             </div>
         </div>
         <div class="flex items-center space-x-2 md:space-x-3">
-            <!-- FIT 解碼器自癒狀態燈 -->
-            <span id="fitStatusBadge" class="px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex items-center">
-                <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse mr-1"></span> 偵測解碼器中
+            <!-- 內建 FIT 解碼器狀態燈 (永久就緒) -->
+            <span class="px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></span> 內建解碼器已就緒
             </span>
-            <span id="apiStatusBadge" class="px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center">
+            <span id="apiStatusBadge" class="px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping mr-1"></span> 未偵測金鑰
             </span>
             <button onclick="toggleSettingsModal(true)" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition duration-150">
@@ -252,7 +252,7 @@
 - 決策優先級：對象的身體狀態（RPE、疲勞感、傷痛回報）優先於既定課表。
 - 動態調整協議：當身體狀況不佳時，必須主動提供三個等級的執行建議：
   - A 級（原訂課表）：身體狀態良好時的標準執行。
-  - B 級（微調課表）：身體疲勞時的降配速或減量執行。
+  - B 級（微調課表）：身體疲勞時的降配速或減量執行.
   - C 級（替代課表）：身體有傷痛或極度疲勞時的交叉訓練（XT）替代方案（例如：自行車、游泳等）。
 
 ## 2. 跑步數據深度分析 (Data Analysis)
@@ -274,84 +274,11 @@
         let parsedLapsData = null; // 儲存成功解析出來的跑步分段 JSON 數據
 
         // 初始化設定
-        window.addEventListener('DOMContentLoaded', async () => {
+        window.addEventListener('DOMContentLoaded', () => {
             initRpeSlider();
             initDragAndDrop();
             loadSavedSettings();
-            // 自愈式背景載入 FIT SDK
-            await autoLoadFitSdk();
         });
-
-        // 🔍 【獨創自癒載入器】動態載入與地毯式尋找 Garmin Fit SDK
-        async function autoLoadFitSdk() {
-            const badge = document.getElementById('fitStatusBadge');
-            
-            // 需要嘗試加載的正確 CDN 路徑（排除 404 的 index.umd.min.js）
-            const cdnUrls = [
-                "https://cdn.jsdelivr.net/npm/@garmin/fitsdk@21.143.0/dist/index.umd.js",
-                "https://unpkg.com/@garmin/fitsdk@21.143.0/dist/index.umd.js",
-                "https://cdn.jsdelivr.net/npm/@garmin/fitsdk/dist/index.umd.js"
-            ];
-
-            for (const url of cdnUrls) {
-                try {
-                    console.log(`[FIT Loader] 正在嘗試從 ${url} 載入模組...`);
-                    await injectScript(url);
-                    
-                    // 檢查是否成功載入並找到 SDK 物件
-                    const sdk = findFitSdkOnWindow();
-                    if (sdk) {
-                        console.log("[FIT Loader] 🎉 成功對接解密晶片！");
-                        badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-400 border border-green-500/20 flex items-center space-x-1";
-                        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500 mr-1"></span> 解碼器已就緒`;
-                        return sdk;
-                    }
-                } catch (e) {
-                    console.warn(`[FIT Loader] 節點載入失敗: ${url}`, e);
-                }
-            }
-
-            // 全部載入失敗時的視覺化標記
-            badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center space-x-1";
-            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 mr-1"></span> 解碼器載入失敗`;
-            return null;
-        }
-
-        function injectScript(url) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = url;
-                script.async = true;
-                script.onload = () => resolve();
-                script.onerror = (e) => reject(e);
-                document.head.appendChild(script);
-            });
-        }
-
-        // 🔍 地毯式掃描全域 `window` 物件（100% 解決命名空間亂套的問題）
-        function findFitSdkOnWindow() {
-            // 優先找已知的命名路徑
-            if (window.GarminFitSdk && window.GarminFitSdk.Decoder) return window.GarminFitSdk;
-            if (window.garmin && window.garmin.Decoder) return window.garmin;
-            if (window.garmin && window.garmin.fit && window.garmin.fit.Decoder) return window.garmin.fit;
-            if (window.Fit && window.Fit.Decoder) return window.Fit;
-            if (window.FitSdk && window.FitSdk.Decoder) return window.FitSdk;
-
-            // 暴力地毯式掃描
-            for (const key in window) {
-                try {
-                    if (window[key] && typeof window[key] === 'object') {
-                        if (window[key].Decoder && window[key].Stream) {
-                            console.log(`[Scanner] 在 window.${key} 發現 Garmin Fit SDK！`);
-                            return window[key];
-                        }
-                    }
-                } catch (e) {
-                    // 忽略安全沙盒跨域存取報錯
-                }
-            }
-            return null;
-        }
 
         // 1. RPE 滑桿動態文字連動
         function initRpeSlider() {
@@ -399,7 +326,170 @@
             });
         }
 
-        // 3. 核心解密引擎：處理檔案並換算
+        // 🚀 【獨研 100% 離線二進位 FIT 解碼器】
+        // 避開所有外部 CDN 與 Node.js 函式庫，直接讀取 File ArrayBuffer 進行物理結構解析
+        function decodeBinaryFitLaps(arrayBuffer) {
+            const view = new DataView(arrayBuffer);
+            const bytes = new Uint8Array(arrayBuffer);
+            let offset = 0;
+            
+            // 1. 讀取與驗證 12 或 14 欄位標頭
+            const headerSize = view.getUint8(offset);
+            if (headerSize !== 12 && headerSize !== 14) {
+                throw new Error("無效的 FIT 檔案結構，標頭長度異常。");
+            }
+            
+            // 2. 驗證 ".FIT" 檔案特徵碼
+            const signature = String.fromCharCode(bytes[offset + 8], bytes[offset + 9], bytes[offset + 10], bytes[offset + 11]);
+            if (signature !== ".FIT") {
+                throw new Error("此檔案缺少 .FIT 簽章安全金鑰，並非合規的手錶原始紀錄。");
+            }
+            
+            // 3. 獲取資料 payload 總長度
+            const dataSize = view.getUint32(offset + 4, true); // 小端序讀取
+            offset += headerSize;
+            
+            const endOffset = offset + dataSize;
+            const localDefs = {}; // 快取 local_message_type 結構對應表
+            const laps = [];
+            
+            // 4. 開始解碼資料流
+            while (offset < endOffset && offset < bytes.length) {
+                const headerByte = bytes[offset];
+                offset++;
+                
+                // 處理壓縮時間戳標頭 (Compressed Timestamp Header)
+                if ((headerByte & 0x80) === 0x80) {
+                    const localMsgType = (headerByte >> 5) & 0x03;
+                    const def = localDefs[localMsgType];
+                    if (def) {
+                        offset += def.totalSize; // 快速跳過這組 payload 
+                    }
+                    continue;
+                }
+                
+                const isDefinition = (headerByte & 0x40) === 0x40;
+                const hasDeveloperFields = (headerByte & 0x20) === 0x20;
+                const localMsgType = headerByte & 0x0F;
+                
+                if (isDefinition) {
+                    // 解碼定義訊息 (Definition Message)
+                    offset++; // 跳過保留欄位 (Reserved)
+                    const arch = bytes[offset]; // 0 = 小端序 (Little Endian), 1 = 大端序 (Big Endian)
+                    const isBigEndian = arch === 1;
+                    offset++;
+                    
+                    // 取得 Global Message Number (16-bit)
+                    const globalMsgNum = view.getUint16(offset, !isBigEndian);
+                    offset += 2;
+                    
+                    const numFields = bytes[offset];
+                    offset++;
+                    
+                    const fields = [];
+                    let totalSize = 0;
+                    
+                    for (let i = 0; i < numFields; i++) {
+                        const fieldDefNum = bytes[offset];
+                        const size = bytes[offset + 1];
+                        const baseType = bytes[offset + 2];
+                        fields.push({ fieldDefNum, size, baseType });
+                        totalSize += size;
+                        offset += 3;
+                    }
+                    
+                    let devFields = [];
+                    if (hasDeveloperFields) {
+                        const numDevFields = bytes[offset];
+                        offset++;
+                        for (let i = 0; i < numDevFields; i++) {
+                            const fieldNum = bytes[offset];
+                            const size = bytes[offset + 1];
+                            const devDataIndex = bytes[offset + 2];
+                            devFields.push({ fieldNum, size, devDataIndex });
+                            totalSize += size;
+                            offset += 3;
+                        }
+                    }
+                    
+                    // 將結構存入快取
+                    localDefs[localMsgType] = {
+                        globalMsgNum,
+                        isBigEndian,
+                        fields,
+                        devFields,
+                        totalSize
+                    };
+                } else {
+                    // 解碼數據訊息 (Data Message)
+                    const def = localDefs[localMsgType];
+                    if (!def) {
+                        // 異常跳出防禦，避免陷入無限迴圈
+                        break;
+                    }
+                    
+                    // 19 代表 Garmin 協定中的 Lap (分段訊息)
+                    if (def.globalMsgNum === 19) {
+                        let lapData = {};
+                        let currentOffset = offset;
+                        
+                        for (const field of def.fields) {
+                            const fSize = field.size;
+                            const fNum = field.fieldDefNum;
+                            const fType = field.baseType;
+                            
+                            let val = null;
+                            try {
+                                if (fSize === 1) {
+                                    val = view.getUint8(currentOffset);
+                                } else if (fSize === 2) {
+                                    val = view.getUint16(currentOffset, !def.isBigEndian);
+                                } else if (fSize === 4) {
+                                    if (fType === 0x88) { // float32
+                                        val = view.getFloat32(currentOffset, !def.isBigEndian);
+                                    } else {
+                                        val = view.getUint32(currentOffset, !def.isBigEndian);
+                                    }
+                                } else if (fSize === 8) {
+                                    if (fType === 0x89) { // float64
+                                        val = view.getFloat64(currentOffset, !def.isBigEndian);
+                                    } else {
+                                        try {
+                                            val = Number(view.getBigUint64(currentOffset, !def.isBigEndian));
+                                        } catch (e) {
+                                            val = view.getUint32(currentOffset, !def.isBigEndian);
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                val = null;
+                            }
+                            
+                            // 映射 Garmin Lap 欄位定義：
+                            // 欄位 9: total_distance (單位: 公分 cm, 縮放比例 100) -> 公尺
+                            // 欄位 8: total_timer_time (單位: 毫秒 ms, 縮放比例 1000) -> 秒
+                            // 欄位 13: avg_speed (單位: 毫米/秒 mm/s, 縮放比例 1000) -> 公尺/秒
+                            // 欄位 16: avg_heart_rate (單位: bpm) -> 平均心率
+                            if (fNum === 9) lapData.totalDistance = val;
+                            if (fNum === 8) lapData.totalTimerTime = val;
+                            if (fNum === 13) lapData.avgSpeed = val;
+                            if (fNum === 16) lapData.avgHeartRate = val;
+                            
+                            currentOffset += fSize;
+                        }
+                        
+                        laps.push(lapData);
+                    }
+                    
+                    // 推進檔案位移指標
+                    offset += def.totalSize;
+                }
+            }
+            
+            return laps;
+        }
+
+        // 3. 檔案上傳觸發模組
         async function handleUploadedFile(file) {
             const uploadPrompt = document.getElementById('uploadPrompt');
             const uploadSuccess = document.getElementById('uploadSuccess');
@@ -412,38 +502,23 @@
 
             try {
                 if (file.name.endsWith('.fit')) {
-                    fileRowsDisplay.innerText = "正在解碼 .fit 檔案...";
+                    fileRowsDisplay.innerText = "正在使用內建二進位晶片進行物理結構解碼...";
                     const buffer = await file.arrayBuffer();
-                    const uint8Array = new Uint8Array(buffer);
                     
-                    // 掃描獲取 SDK 物件
-                    const FitSdk = findFitSdkOnWindow();
-                    if (!FitSdk) {
-                        throw new Error("Garmin Fit 解碼模組未載入成功。請重新整理網頁，或檢查您的手機是否阻擋了外部 CDN 連線。");
-                    }
+                    // 執行 100% 離線物理層解碼
+                    const rawLaps = decodeBinaryFitLaps(buffer);
                     
-                    const { Decoder, Stream } = FitSdk;
-                    const stream = Stream.fromByteArray(uint8Array);
-                    const decoder = new Decoder(stream);
-                    
-                    if (!decoder.isCorrectFileType()) {
-                        throw new Error("此檔案損壞，或非標準 Garmin FIT 檔案格式。");
-                    }
-                    
-                    const { messages } = decoder.read();
-                    const laps = messages.lapMesgs || [];
-                    
-                    if (laps.length === 0) {
-                        throw new Error("解碼成功，但檔案中找不到任何分段 Laps 數據紀錄。");
+                    if (rawLaps.length === 0) {
+                        throw new Error("物理層解密完成，但該手錶軌跡中缺少 Lap（每公里分段計時）數據。");
                     }
 
-                    // 數據提煉與「5/6分速」物理公式換算
-                    parsedLapsData = laps.map((lap, index) => {
-                        const distanceKm = lap.totalDistance ? (lap.totalDistance / 1000).toFixed(2) : "N/A";
-                        const timeSec = lap.totalTimerTime || lap.totalElapsedTime || 0;
-                        const avgSpeedMs = lap.avgSpeed;
+                    // 將物理層數據提煉並自動進行「5/6分速」換算
+                    parsedLapsData = rawLaps.map((lap, index) => {
+                        const distanceKm = lap.totalDistance ? (lap.totalDistance / 100 / 1000).toFixed(2) : "N/A";
+                        const timeSec = lap.totalTimerTime ? (lap.totalTimerTime / 1000) : 0;
+                        const avgSpeedMs = lap.avgSpeed ? (lap.avgSpeed / 1000) : 0;
                         
-                        // 跑步精準換算公式： 配速 (分/公里) = 16.666 / 速度 (m/s)
+                        // 跑步精準速度公式： 配速 (分/公里) = 16.666 / 速度 (m/s)
                         let formattedPace = "N/A";
                         if (avgSpeedMs && avgSpeedMs > 0) {
                             const totalMinutes = 16.6666 / avgSpeedMs;
@@ -461,7 +536,7 @@
                         };
                     });
 
-                    fileRowsDisplay.innerText = `成功解析出 ${parsedLapsData.length} 個運動分段 Laps`;
+                    fileRowsDisplay.innerText = `🔋 物理層已成功無損提取 ${parsedLapsData.length} 個分段 Laps`;
 
                 } else if (file.name.endsWith('.json')) {
                     const text = await file.text();
@@ -469,7 +544,7 @@
                     const laps = json.laps || json.history || json;
                     
                     if (!Array.isArray(laps)) {
-                        throw new Error("JSON 格式不正確，找不到 Laps 陣列數據。");
+                        throw new Error("JSON 結構不正確，找不到 Laps 陣列數據。");
                     }
 
                     parsedLapsData = laps.map((lap, index) => {
@@ -504,7 +579,7 @@
                 console.error("File parsing error:", err);
                 uploadPrompt.classList.remove('hidden');
                 uploadSuccess.classList.add('hidden');
-                appendChatError("檔案解密解析失敗", err.message);
+                appendChatError("二進位解碼引擎拒絕解析", err.message);
                 parsedLapsData = null;
             }
         }
